@@ -32,7 +32,7 @@
 
 namespace Tutorials
 {
-  namespace TempProd
+  namespace TempCons
   {
     using DUNE_NAMESPACES;
 
@@ -44,6 +44,7 @@ namespace Tutorials
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx)
       {
+	bind<IMC::Temperature>(this);
       }
 
       //! Update internal state with new parameter values.
@@ -80,20 +81,22 @@ namespace Tutorials
       void
       onResourceRelease(void)
       {
+      }	
+
+      //! Consumer method.
+      void
+	  consume(const IMC::Temperature* msg)
+      {
+    	inf("temperature is %f", msg->value);
       }
 
       //! Main loop.
       void
       onMain(void)
       {
-	IMC::Temperature msg;   // use temperature message from IMC 
-	msg.value = 20;         // Initialize the temperature value.
-
-	while (!stopping())
-	{
-	  msg.value += 1;      // increment the value just to see the output	
-	  dispatch(msg);       // Dispatch the value to the message bus
-	  Delay::wait(0.01);    // Wait doing nothing.
+        while (!stopping())
+        {
+          waitForMessages(1.0);
         }
       }
     };
