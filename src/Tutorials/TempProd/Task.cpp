@@ -36,65 +36,71 @@ namespace Tutorials
   {
     using DUNE_NAMESPACES;
 
-    struct Task: public DUNE::Tasks::Task
+    //!Task arguments.
+    struct Arguments
+      {
+        //! PRNG type.
+        std::string prng_type;
+        //! PRNG seed.
+        int prng_seed;
+        //! Mean temperature value.
+        float mean_value;
+        //! Standard deviation of temperature measurements.
+        double std_dev;
+      };
+
+    struct Task: public DUNE::Tasks::Periodic
     {
-      //! Constructor.
-      //! @param[in] name task name.
-      //! @param[in] ctx context.
+      //! PRNG handle
+      Random::Generator* m_prng;
+
+      //! Task arguments.
+      Arguments m_args;
+
       Task(const std::string& name, Tasks::Context& ctx):
-        DUNE::Tasks::Task(name, ctx)
+        DUNE::Tasks::Periodic(name, ctx),
+        m_prng(NULL)
       {
+    	param("Standard deviation", m_args.std_dev)
+        .description("Standard deviation of produced temperature")
+        .units(Units::DegreeCelsius)
+        .defaultValue("0.1");
+
+    	param("PRNG Type", m_args.prng_type)
+    	.defaultValue(Random::Factory::c_default);
+
+    	param("PRNG Seed", m_args.prng_seed)
+        .defaultValue("-1");
+
+    	param("Mean value", m_args.mean_value)
+    	.description("Mean value of produced temperature")
+    	.units(Units::DegreeCelsius)
+    	.defaultValue("25.0");
       }
 
-      //! Update internal state with new parameter values.
-      void
-      onUpdateParameters(void)
-      {
-      }
-
-      //! Reserve entity identifiers.
-      void
-      onEntityReservation(void)
-      {
-      }
-
-      //! Resolve entity names.
-      void
-      onEntityResolution(void)
-      {
-      }
-
-      //! Acquire resources.
+      //! Aquire resources.
       void
       onResourceAcquisition(void)
       {
-      }
-
-      //! Initialize resources.
-      void
-      onResourceInitialization(void)
-      {
+        m_prng = Random::Factory::create(m_args.prng_type,
+                                         m_args.prng_seed);
       }
 
       //! Release resources.
       void
       onResourceRelease(void)
       {
+        Memory::clear(m_prng);
       }
 
-      //! Main loop.
+      //! Periodic work.
       void
-      onMain(void)
+      task(void)
       {
-	IMC::Temperature msg;   // use temperature message from IMC 
-	msg.value = 20;         // Initialize the temperature value.
-
-	while (!stopping())
-	{
-	  msg.value += 1;      // increment the value just to see the output	
-	  dispatch(msg);       // Dispatch the value to the message bus
-	  Delay::wait(0.01);    // Wait doing nothing.
-        }
+        IMC::Temperature temperature;
+        temperature.value = m_args.mean_value + m_prng->gaussian()*m_args.std_dev;
+        temperature.setSourceEntity(getEntityId());
+        dispatch(temperature);
       }
     };
   }

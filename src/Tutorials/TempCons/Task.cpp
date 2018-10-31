@@ -38,56 +38,30 @@ namespace Tutorials
 
     struct Task: public DUNE::Tasks::Task
     {
-      //! Constructor.
-      //! @param[in] name task name.
-      //! @param[in] ctx context.
+      // Parameters.
+      std::string m_trg_prod;
+
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx)
       {
-	bind<IMC::Temperature>(this);
-      }
+       param("Target Producer", m_trg_prod)
+        .description("Target producer to read from")
+        .defaultValue("Producer");
 
-      //! Update internal state with new parameter values.
-      void
-      onUpdateParameters(void)
-      {
+       bind<IMC::Temperature>(this);
       }
-
-      //! Reserve entity identifiers.
-      void
-      onEntityReservation(void)
-      {
-      }
-
-      //! Resolve entity names.
-      void
-      onEntityResolution(void)
-      {
-      }
-
-      //! Acquire resources.
-      void
-      onResourceAcquisition(void)
-      {
-      }
-
-      //! Initialize resources.
-      void
-      onResourceInitialization(void)
-      {
-      }
-
-      //! Release resources.
-      void
-      onResourceRelease(void)
-      {
-      }	
 
       //! Consumer method.
       void
-	  consume(const IMC::Temperature* msg)
+      consume(const IMC::Temperature* msg)
       {
-    	inf("temperature is %f", msg->value);
+      	//if (m_trg_prod == msg.get(SourceEntity))
+      	if (m_trg_prod == resolveEntity( msg->getSourceEntity()) )
+      	{
+          inf("Source (DUNE instance) ID is: %d", msg->getSource() );
+          inf("Source entity (Task instance) ID is: %d", msg->getSourceEntity() );
+      	  inf("Temperature is %f, from %s", msg->value, resolveEntity(msg->getSourceEntity()).c_str());
+        }
       }
 
       //! Main loop.
