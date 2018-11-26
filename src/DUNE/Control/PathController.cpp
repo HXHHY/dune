@@ -59,6 +59,7 @@ namespace DUNE
     //! Depth margin when limiting depth in bottom tracker
     static const float c_depth_margin = 1.0;
 
+    // Constructor -> PathController is derived from Task
     PathController::PathController(std::string name, Tasks::Context& ctx):
       Task(name, ctx),
       m_bt_entity(NULL),
@@ -208,11 +209,13 @@ namespace DUNE
       bind<IMC::DesiredSpeed>(this);
     }
 
+    // Destructor
     PathController::~PathController(void)
     {
       Memory::clear(m_btrack);
     }
 
+    // Is called whehn parameters change
     void
     PathController::onUpdateParameters(void)
     {

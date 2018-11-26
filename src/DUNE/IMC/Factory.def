@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 60bae9d2a5dfb6cb336b442c839133fb                            *
+// IMC XML MD5: 10dd33b2beb0db6eacc07ab3cc5d66c5                            *
 //***************************************************************************
 
 MESSAGE(1, EntityState)
@@ -238,6 +238,7 @@ MESSAGE(493, AutonomousSection)
 MESSAGE(494, FollowPoint)
 MESSAGE(495, Alignment)
 MESSAGE(496, StationKeepingExtended)
+MESSAGE(499, Magnetometer)
 MESSAGE(500, VehicleState)
 MESSAGE(501, VehicleCommand)
 MESSAGE(502, MonitorEntityState)
@@ -339,4 +340,6 @@ MESSAGE(905, Tachograph)
 MESSAGE(906, ApmStatus)
 MESSAGE(907, SadcReadings)
 MESSAGE(908, DmsDetection)
+MESSAGE(909, TargetState)
+MESSAGE(2006, TotalMagIntensity)
 #undef MESSAGE

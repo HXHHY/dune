@@ -55,13 +55,14 @@ namespace Tutorials
       void
       consume(const IMC::Temperature* msg)
       {
-      	//if (m_trg_prod == msg.get(SourceEntity))
-      	if (m_trg_prod == resolveEntity( msg->getSourceEntity()) )
-      	{
-          inf("Source (DUNE instance) ID is: %d", msg->getSource() );
-          inf("Source entity (Task instance) ID is: %d", msg->getSourceEntity() );
-      	  inf("Temperature is %f, from %s", msg->value, resolveEntity(msg->getSourceEntity()).c_str());
-        }
+        inf("Temperature is %f", msg->value);
+        //if (m_trg_prod == msg.get(SourceEntity))
+        //if (m_trg_prod == resolveEntity( msg->getSourceEntity()) )
+        //{
+          //inf("Source (DUNE instance) ID is: %d", msg->getSource() );
+          //inf("Source entity (Task instance) ID is: %d", msg->getSourceEntity() );
+          //inf("Temperature is %f, from %s", msg->value, resolveEntity(msg->getSourceEntity()).c_str());
+        //}
       }
 
       //! Main loop.
@@ -70,7 +71,7 @@ namespace Tutorials
       {
         while (!stopping())
         {
-          waitForMessages(1.0);
+          waitForMessages(0.1);
         }
       }
     };

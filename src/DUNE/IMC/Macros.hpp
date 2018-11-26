@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 60bae9d2a5dfb6cb336b442c839133fb                            *
+// IMC XML MD5: 10dd33b2beb0db6eacc07ab3cc5d66c5                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -448,6 +448,8 @@
 #define DUNE_IMC_ALIGNMENT 495
 //! StationKeepingExtended identification number.
 #define DUNE_IMC_STATIONKEEPINGEXTENDED 496
+//! Magnetometer identification number.
+#define DUNE_IMC_MAGNETOMETER 499
 //! VehicleState identification number.
 #define DUNE_IMC_VEHICLESTATE 500
 //! VehicleCommand identification number.
@@ -650,5 +652,9 @@
 #define DUNE_IMC_SADCREADINGS 907
 //! DmsDetection identification number.
 #define DUNE_IMC_DMSDETECTION 908
+//! TargetState identification number.
+#define DUNE_IMC_TARGETSTATE 909
+//! TotalMagIntensity identification number.
+#define DUNE_IMC_TOTALMAGINTENSITY 2006
 
 #endif

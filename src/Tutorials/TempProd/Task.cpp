@@ -78,7 +78,7 @@ namespace Tutorials
     	.defaultValue("25.0");
       }
 
-      //! Aquire resources.
+      //! Acquire resources.
       void
       onResourceAcquisition(void)
       {
@@ -99,7 +99,7 @@ namespace Tutorials
       {
         IMC::Temperature temperature;
         temperature.value = m_args.mean_value + m_prng->gaussian()*m_args.std_dev;
-        temperature.setSourceEntity(getEntityId());
+        //temperature.setSourceEntity(getEntityId());
         dispatch(temperature);
       }
     };

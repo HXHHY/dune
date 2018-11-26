@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 60bae9d2a5dfb6cb336b442c839133fb                            *
+// IMC XML MD5: 10dd33b2beb0db6eacc07ab3cc5d66c5                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -16481,6 +16481,102 @@ namespace DUNE
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
+    //! Magnetometer Maneuver.
+    class Magnetometer: public Maneuver
+    {
+    public:
+      //! Direction.
+      enum DirectionEnum
+      {
+        //! Clockwise First.
+        MD_CLOCKW_FIRST = 0,
+        //! Counter Clockwise First.
+        MD_CCLOCKW_FIRST = 1
+      };
+
+      //! Timeout.
+      uint16_t timeout;
+      //! Latitude WGS-84.
+      fp64_t lat;
+      //! Longitude WGS-84.
+      fp64_t lon;
+      //! Z Reference.
+      fp32_t z;
+      //! Z Units.
+      uint8_t z_units;
+      //! Speed.
+      fp32_t speed;
+      //! Speed Units.
+      uint8_t speed_units;
+      //! Bearing.
+      fp64_t bearing;
+      //! Width.
+      fp32_t width;
+      //! Direction.
+      uint8_t direction;
+      //! Custom settings for maneuver.
+      std::string custom;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 499;
+      }
+
+      Magnetometer(void);
+
+      Magnetometer*
+      clone(void) const
+      {
+        return new Magnetometer(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return Magnetometer::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "Magnetometer";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 41;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(custom);
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
     //! Vehicle State.
     class VehicleState: public Message
     {
@@ -24868,6 +24964,150 @@ namespace DUNE
       {
         return 64;
       }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Target State.
+    class TargetState: public Message
+    {
+    public:
+      //! Latitude WGS-84.
+      fp32_t lat;
+      //! Longitude WGS-84.
+      fp32_t lon;
+      //! x coordinate.
+      fp32_t x;
+      //! y coordinate.
+      fp32_t y;
+      //! x velocity.
+      fp32_t vx;
+      //! y velocity.
+      fp32_t vy;
+      //! Depth.
+      uint8_t depth;
+      //! Speed.
+      fp32_t speed;
+      //! Heading.
+      fp32_t psi;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 909;
+      }
+
+      TargetState(void);
+
+      TargetState*
+      clone(void) const
+      {
+        return new TargetState(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return TargetState::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "TargetState";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 33;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Total Magnetic Field Intensity.
+    class TotalMagIntensity: public Message
+    {
+    public:
+      //! Value.
+      fp64_t value;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 2006;
+      }
+
+      TotalMagIntensity(void);
+
+      TotalMagIntensity*
+      clone(void) const
+      {
+        return new TotalMagIntensity(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return TotalMagIntensity::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "TotalMagIntensity";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 8;
+      }
+
+      fp64_t
+      getValueFP(void) const;
+
+      void
+      setValueFP(fp64_t val);
 
       void
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
