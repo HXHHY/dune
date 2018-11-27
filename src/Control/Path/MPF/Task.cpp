@@ -72,13 +72,11 @@ namespace Control
               Matrix delta_inv;           // Inverse of delta matrix
               Matrix Kp;                  // Gain matrix composed for k_gain.x and k_gain.y
               double k_eta;               // Gain for MPF correction error signal
-              double threshold;           // Distance threshold for starting the gamma integration.
               uint8_t faulty;
               fp64_t faulty_speed;
               std::string path_type_name; // Type of path we want to define.
               int path_type;
               bool isFollowing;           // True if the controller is trying to follow some external vehicle
-              bool gamma_reached = true;   // Flag indicating if the integration of gamma has started
               //bool use_controller;
           } m_ctrl_params;
 
@@ -154,10 +152,6 @@ namespace Control
                       .defaultValue("0.3")
                       .description("Desired speed of the vehicle around the path, in m/s");
 
-              param("Distance Threshold", m_ctrl_params.threshold)
-                      .defaultValue("1.0")
-                      .description("Distance threshold before starting the integration of gamma");
-
               param("Faulty", m_ctrl_params.faulty)
                       .defaultValue("0")
                       .description("Simulate fault");
@@ -175,11 +169,11 @@ namespace Control
                       .description("Radius of the desired circle");
 
               param("Ellipse x-amplitude", m_path_params.ampl.x)
-                      .defaultValue("1.0")
+                      .defaultValue("15.0")
                       .description("Amplitude of the desired ellipse in the x-direction");
 
               param("Ellipse y-amplitude", m_path_params.ampl.y)
-                      .defaultValue("1.0")
+                      .defaultValue("15.0")
                       .description("Amplitude of the desired ellipse in the y-direction");
 
               param("Is it following?", m_ctrl_params.isFollowing)
@@ -219,7 +213,6 @@ namespace Control
             // Initialize the path variables
             m_ctrl_var.gamma = 0.0;
             m_ctrl_var.gamma_dot = 0.0;
-            m_ctrl_params.gamma_reached = true;
 
             // Initialize the reference variables
             double temp2Dzeros[2] = {0.0, 0.0};
@@ -231,15 +224,23 @@ namespace Control
             double tempEps[2] = {m_ctrl_params.epsilon, 0.0};
             Matrix tempEpsVector(tempEps, 2, 1);
             m_ctrl_var.Eps = tempEpsVector;
-            m_ctrl_params.threshold = m_ctrl_params.threshold + m_ctrl_params.epsilon;
 
             // Initialize the choosen path type
             if (m_ctrl_params.path_type_name == "circle")
+            {
+                inf("Circular path was chosen.");
                 m_ctrl_params.path_type = 1; // Do a circle
+            }
             else if (m_ctrl_params.path_type_name == "ellipse")
+            {
+                inf("Elliptical path was chosen.");
                 m_ctrl_params.path_type = 2; // Do a ellipse
+            }
             else
-                m_ctrl_params.path_type = 1; // Do a circle
+            {
+                inf("Goto target point.");
+                m_ctrl_params.path_type = 0; // Just GotoPoint
+            }
 
             // Computes targetID if controller is in follower mode
             if (m_ctrl_params.isFollowing)
@@ -256,44 +257,43 @@ namespace Control
         {
             inf("Path startup!");
 
-            // Reset gamma here according to the objective quadrant.
-            if ( ts.track_bearing > 0 )
-            {
-                // Northeast quadrant
-                if ( ts.track_bearing < Math::c_pi/2 )
-                    m_ctrl_var.gamma = -Math::c_pi/2;
-                // Southeast quadrant
-                else
-                    m_ctrl_var.gamma = 0;
-            }
-            else
-            {
-                // Nortwest quadrant
-                if ( ts.track_bearing > -Math::c_pi/2 )
-                    m_ctrl_var.gamma = Math::c_pi;
-                // Southwest quadrant
-                else
-                    m_ctrl_var.gamma = Math::c_pi/2;
-            }
+//            // Reset gamma here according to the objective quadrant.
+//            if ( ts.track_bearing > 0 )
+//            {
+//                // Northeast quadrant
+//                if ( ts.track_bearing < Math::c_pi/2 )
+//                    m_ctrl_var.gamma = -Math::c_pi/2;
+//                // Southeast quadrant
+//                else
+//                    m_ctrl_var.gamma = 0;
+//            }
+//            else
+//            {
+//                // Nortwest quadrant
+//                if ( ts.track_bearing > -Math::c_pi/2 )
+//                    m_ctrl_var.gamma = Math::c_pi;
+//                // Southwest quadrant
+//                else
+//                    m_ctrl_var.gamma = Math::c_pi/2;
+//            }
+
+            m_ctrl_var.gamma = 0.0;
             m_ctrl_var.gamma_dot = 0.0;
-            m_ctrl_params.gamma_reached = true;
 
             // If controller is not in Follow Mode, target is stationary at the end point.
             if (!m_ctrl_params.isFollowing)
             {
                 double tempPt[2] = {ts.end.x,ts.end.y};
                 Matrix tempPtVec(tempPt, 2, 1);
-                m_target_es.Pt= tempPtVec;
+                m_target_es.Pt = tempPtVec;
 
                 double tempdPt[2] = {0, 0};
                 Matrix tempdPtVec(tempdPt, 2, 1);
-                m_target_es.dPt= tempdPtVec;
-
-                //m_target_es.distanceTillEnd = Math::norm(m_target_es.Pt.element(0,0) - ts.end.x, m_target_es.Pt.element(1,0) - ts.end.y);
+                m_target_es.dPt = tempdPtVec;
             }
 
             // Logs
-            inf("Target initial position = (%f, %f)", m_target_es.Pt.element(0,0), m_target_es.Pt.element(1,0));
+            inf("Target initial pos. = (%f, %f)", m_target_es.Pt(0,0), m_target_es.Pt(1,0));
         }
 
         //! Reserve entity identifiers.
@@ -317,11 +317,8 @@ namespace Control
         void
         computePath(void)
         {
-            double Pdx;
-            double Pdy;
-
-            double grad_Pdx;
-            double grad_Pdy;
+            double Pdx; double Pdy;
+            double grad_Pdx; double grad_Pdy;
 
             switch ( m_ctrl_params.path_type )
             {
@@ -329,15 +326,15 @@ namespace Control
             case 1:
                 Pdx = m_path_params.r*std::cos(m_ctrl_var.gamma/m_path_params.r);
                 Pdy = m_path_params.r*std::sin(m_ctrl_var.gamma/m_path_params.r);
-                grad_Pdx = -std::sin(m_ctrl_var.gamma);
-                grad_Pdy = std::cos(m_ctrl_var.gamma);
+                grad_Pdx = -std::sin(m_ctrl_var.gamma/m_path_params.r);
+                grad_Pdy = std::cos(m_ctrl_var.gamma/m_path_params.r);
                 break;
             // case is ellipse
             case 2:
                 Pdx = m_path_params.ampl.x*std::cos(m_ctrl_var.gamma/m_path_params.ampl.x);
                 Pdy = m_path_params.ampl.y*std::sin(m_ctrl_var.gamma/m_path_params.ampl.y);
-                grad_Pdx = -std::sin(m_ctrl_var.gamma);
-                grad_Pdy = std::cos(m_ctrl_var.gamma);
+                grad_Pdx = -std::sin(m_ctrl_var.gamma/m_path_params.ampl.x);
+                grad_Pdy = std::cos(m_ctrl_var.gamma/m_path_params.ampl.y);
                 break;
             // otherwise, just follow ("path" is the target location)
             default:
@@ -368,7 +365,7 @@ namespace Control
             Matrix tempRvVec(tempRv, 2, 2);
             m_state.Rv = tempRvVec;
 
-            inf("Vehicle position = (%f, %f)", m_state.Pv.element(0,0), m_state.Pv.element(1,0));
+            //inf("Vehicle pos. = (%f, %f)", m_state.Pv(0,0), m_state.Pv(1,0));
         }
 
         //! Updates the state of the path variable gamma.
@@ -376,9 +373,9 @@ namespace Control
         updatePathVariables(const TrackingState* ts)
         {
             // If the threshoud has been reached, integrate gamma
-            if ( m_ctrl_params.gamma_reached )
-                // m_ctrl_var.gamma_dot = m_ctrl_var.gamma_ref;
-                m_ctrl_var.gamma_dot = m_ctrl_var.gamma_ref + m_ctrl_var.g_err;
+            // m_ctrl_var.gamma_dot = m_ctrl_var.gamma_ref;
+            m_ctrl_var.gamma_dot = m_ctrl_var.gamma_ref + m_ctrl_var.g_err;
+            // m_ctrl_var.gamma_dot = m_ctrl_var.gamma_ref/m_ctrl_var.grad_Pd.norm_2() + m_ctrl_var.g_err;
 
             m_ctrl_var.gamma = m_ctrl_var.gamma + ts->delta*m_ctrl_var.gamma_dot;
             inf("Gamma = %f", m_ctrl_var.gamma);
@@ -419,9 +416,9 @@ namespace Control
         void
         step(const IMC::EstimatedState& state, const TrackingState& ts)
         {
-            //inf("Target position = (%f, %f)", m_target_es.Pt.element(0,0), m_target_es.Pt.element(1,0));
-            //if ( m_target_es.dPt.element(0,0) != 0 && m_target_es.dPt.element(1,0) != 0 )
-                //inf("Target velocity = (%f, %f)", m_target_es.dPt.element(0,0), m_target_es.dPt.element(1,0));
+            inf("Target position = (%f, %f)", m_target_es.Pt(0,0), m_target_es.Pt(1,0));
+            //if ( m_target_es.dPt(0,0) != 0 && m_target_es.dPt(1,0) != 0 )
+                //inf("Target velocity = (%f, %f)", m_target_es.dPt(0,0), m_target_es.dPt(1,0));
 
             // Computes the desired path
             computePath();
@@ -433,7 +430,8 @@ namespace Control
             m_ctrl_var.P_ref = m_target_es.Pt + m_ctrl_var.Pd;
             m_ctrl_var.dP_ref = m_target_es.dPt + m_ctrl_var.grad_Pd*m_ctrl_var.gamma_dot;
 
-            inf("Reference = (%f, %f)", m_ctrl_var.P_ref.element(0,0), m_ctrl_var.P_ref.element(1,0));
+            inf("Reference = (%f, %f)", m_ctrl_var.P_ref(0,0), m_ctrl_var.P_ref(1,0));
+            inf("Ref. - Target = (%f, %f)", m_ctrl_var.P_ref(0,0) - m_target_es.Pt(0,0), m_ctrl_var.P_ref(1,0) - m_target_es.Pt(1,0));
 
             // Compute errors (world and local coordinates)
             m_ctrl_var.World_error = m_state.Pv - m_ctrl_var.P_ref;
@@ -446,14 +444,12 @@ namespace Control
             error_dist = Math::norm(m_state.Pv(0,0)-ts.end.x, m_state.Pv(1,0)-ts.end.y);
             inf("Error norm = %f", error_norm);
             inf("Distance from target = %f", error_dist);
-            if ( error_norm < m_ctrl_params.threshold )
-                m_ctrl_params.gamma_reached = true;
 
             // Compute the MPF error correction signal g_err
             Matrix etaM = -transpose(m_ctrl_var.MPF_error)*((transpose(m_state.Rv)*(m_ctrl_var.grad_Pd/m_ctrl_var.grad_Pd.norm_2())));
             double eta = etaM(0,0);
-            //m_ctrl_var.g_err = -m_ctrl_params.k_eta*tanh(eta);
-            m_ctrl_var.g_err = -m_ctrl_params.k_eta*m_ctrl_var.gamma_ref*eta;
+            //m_ctrl_var.g_err = -m_ctrl_params.k_eta*m_ctrl_var.gamma_ref*tanh(eta);
+            m_ctrl_var.g_err = -m_ctrl_params.k_eta*eta;
 
             updatePathVariables(&ts);
 
@@ -464,11 +460,11 @@ namespace Control
             //m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.SatMPF_error + transpose(m_state.Rv)*m_ctrl_var.dP_ref);
 
             // Dispatch control commands
-            //m_speed_cmd.value = m_ctrl_var.cmd.element(0,0);
-            m_speed_cmd.value = sat(m_ctrl_var.cmd.element(0,0), 0.0, 2.0);
+            m_speed_cmd.value = m_ctrl_var.cmd(0,0);
+            //m_speed_cmd.value = sat(m_ctrl_var.cmd(0,0), 0.0, 2.0);
 
-            //m_hrate_cmd.value = m_ctrl_var.cmd.element(1,0);
-            m_hrate_cmd.value = sat(m_ctrl_var.cmd.element(1,0), -1.0, 1.0);
+            m_hrate_cmd.value = m_ctrl_var.cmd(1,0);
+            //m_hrate_cmd.value = sat(m_ctrl_var.cmd(1,0), -1.0, 1.0);
 
 //            if(m_ctrl_params.faulty && (m_ctrl_var.gamma > 50) && (m_ctrl_var.gamma < 100))
 //            {
@@ -482,7 +478,7 @@ namespace Control
             dispatch(m_hrate_cmd);
 
             // Logs
-            inf("Control command = (%f, %f)", m_speed_cmd.value, m_hrate_cmd.value);
+            //inf("Control command = (%f, %f)", m_speed_cmd.value, m_hrate_cmd.value);
         }
 
         void
@@ -553,12 +549,12 @@ namespace Control
 //            }
 
 //            // Integrates the simulated state (Euler method)
-//            double tempPt[2] = {m_target_es.Pt.element(0,0) + ts->delta*dPtx, m_target_es.Pt.element(1,0) + ts->delta*dPty};
+//            double tempPt[2] = {m_target_es.Pt(0,0) + ts->delta*dPtx, m_target_es.Pt(1,0) + ts->delta*dPty};
 //            Matrix tempPtVec(tempPt, 2, 1);
 //            m_target_es.Pt = tempPtVec;
 
 //            // Update the distance to the end
-//            m_target_es.distanceTillEnd = Math::norm(m_target_es.Pt.element(0,0) - ts->end.x, m_target_es.Pt.element(1,0) - ts->end.y);
+//            m_target_es.distanceTillEnd = Math::norm(m_target_es.Pt(0,0) - ts->end.x, m_target_es.Pt(1,0) - ts->end.y);
 //        }
 
 //        //! Converts strings into upper case
