@@ -64,7 +64,11 @@ namespace Control
             bool isFollower;    // Checks if the controller is a follower
             std::string target; // If the controller is a follower, then specify targetVehicle to follow
             unsigned target_ID; // ID of the target
-            //bool use_controller;
+
+            double max_speed;           // Maximum speed command to send to AutoPilot
+            double min_speed;           // Minimum speed command to send to AutoPilot
+            double max_omega;           // Maximum angular velocity command to send to AutoPilot
+            double min_omega;           // Minimum angular velocity command to send to AutoPilot
         } m_control_params;
 
         struct CTRL_State
@@ -126,6 +130,22 @@ namespace Control
             param("Bound Epsilon", m_control_params.epsilon)
                     .defaultValue("0.3")
                     .description("Bound around the path in meters");
+
+            param("Maximum Speed", m_control_params.max_speed)
+                    .defaultValue("2.0")
+                    .description("Maximum speed command to send to AutoPilot.");
+
+            param("Minimum Speed", m_control_params.min_speed)
+                    .defaultValue("0.0")
+                    .description("Minimum speed command to send to AutoPilot.");
+
+            param("Maximum Ang Vel", m_control_params.max_omega)
+                    .defaultValue("1.0")
+                    .description("Maximum angular velocity command to send to AutoPilot.");
+
+            param("Minimum Ang Vel", m_control_params.min_omega)
+                    .defaultValue("-1.0")
+                    .description("Minimum angular velocity command to send to AutoPilot.");
 
             param("Control Period", m_control_params.dt)
                     .defaultValue("0.1")
@@ -269,13 +289,17 @@ namespace Control
                 dispatch(m_target_state);
             }
 
+            inf("Target coordinates are = (%f, %f)",
+                Angles::degrees(m_target_state.lat),
+                Angles::degrees(m_target_state.lon));
+
             m_control_state.lat = state.lat;
             m_control_state.lon = state.lon;
             m_control_state.x = state.x;
             m_control_state.y = state.y;
             m_control_state.psi = state.psi;
 
-            inf("Vehicle_x = %f, Vehicle_y = %f", m_control_state.x, m_control_state.y);
+            inf("Vehicle coords = (%f, %f)", m_control_state.x, m_control_state.y);
 
             // Computes control signals from GotoPoint control.
             computeGotoPoint();
@@ -287,7 +311,6 @@ namespace Control
             //inf("Heading = %f", state.psi);
             //inf("Goto_x = %f, Goto_y = %f", m_control_ref.x, m_control_ref.y);
             //inf("Speed = %f, Heading rate = %f", state.u, state.r);
-
         }
 
         void
@@ -331,8 +354,8 @@ namespace Control
 //            m_speed_cmd.value = speed_ctrl_cmd;
 //            m_hrate_cmd.value = hrate_ctrl_cmd;
 
-            m_speed_cmd.value = sat(speed_ctrl_cmd, 0.0, 2.0);
-            m_hrate_cmd.value = sat(hrate_ctrl_cmd, -0.5, 0.5);
+            m_speed_cmd.value = sat(speed_ctrl_cmd, m_control_params.min_speed, m_control_params.max_speed);
+            m_hrate_cmd.value = sat(hrate_ctrl_cmd, m_control_params.min_omega, m_control_params.max_omega);
 
             //m_speed_cmd.setSourceEntity(getEntityId());
             //m_hrate_cmd.setSourceEntity(getEntityId());
