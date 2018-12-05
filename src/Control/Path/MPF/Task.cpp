@@ -60,6 +60,7 @@ namespace Control
               double k_eta;               // Gain for MPF correction error signal
               double dead_zone;           // Dead zone for the hyperbolic tangent on the MPF correction error signal
 
+              fp64_t zero_threshold = 0.001; // Internal threshold to consider a scalar as null.
               uint8_t faulty;
               fp64_t faulty_speed;
 
@@ -176,7 +177,7 @@ namespace Control
                       .description("Defines the type of path around the moving target. Can be (i) circle, (ii) ellipse, (iii) lemniscate");
 
               param("Circle Radius", m_path_params.r)
-                      .defaultValue("1.0")
+                      .defaultValue("15.0")
                       .description("Radius of the circle");
 
               param("Ellipse x-amplitude", m_path_params.ampl.x)
@@ -456,8 +457,17 @@ namespace Control
             inf("MPF error norm = %f", m_ctrl_var.MPF_error.norm_2());
 
             // Update the MPF error correction signal g_err
-            Matrix etaM = -transpose(m_ctrl_var.MPF_error)*((transpose(m_state.Rv)*(m_ctrl_var.grad_Pd/m_ctrl_var.grad_Pd.norm_2())));
-            double eta = etaM(0,0);
+            double eta;
+            Matrix etaM;
+//            double tempZeroMatrix = 0;
+//            Matrix zeroMatrix(tempZeroMatrix,1,1);
+            double norm_gradPd = m_ctrl_var.grad_Pd.norm_2();
+            if ( norm_gradPd > m_ctrl_params.zero_threshold ) {
+                etaM = -transpose(m_ctrl_var.MPF_error)*((transpose(m_state.Rv)*(m_ctrl_var.grad_Pd/norm_gradPd)));
+                eta = etaM(0,0);
+            }
+            else
+                eta = 0;
             m_ctrl_var.g_err = -m_ctrl_params.k_eta*m_ctrl_var.gamma_ref*(tanh(eta+m_ctrl_params.dead_zone) + tanh(eta-m_ctrl_params.dead_zone));
             //m_ctrl_var.g_err = -m_ctrl_params.k_eta*eta;
 
