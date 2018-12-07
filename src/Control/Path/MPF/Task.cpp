@@ -52,30 +52,38 @@ namespace Control
           };
 
           struct ControlParams {
-              fp32_t dt;                  // Control period
-              fp64_t epsilon;             // epsilon error
-              Coord k_gain;               // Control gain
-              Matrix delta_inv;           // Inverse of delta matrix
-              Matrix Kp;                  // Gain matrix composed for k_gain.x and k_gain.y
-              double k_eta;               // Gain for MPF correction error signal
-              double dead_zone;           // Dead zone for the hyperbolic tangent on the MPF correction error signal
+              Coord k_gain;         // Control gain
+              Matrix delta_inv;     // Inverse of delta matrix
+              Matrix Kp;            // Gain matrix composed for k_gain.x and k_gain.y
 
-              fp64_t zero_threshold = 0.001; // Internal threshold to consider a scalar as null.
-              uint8_t faulty;
-              fp64_t faulty_speed;
+              fp32_t dt;                            // Control period
+              fp64_t epsilon;                       // epsilon error
+              fp64_t zero_threshold = 0.001;        // Internal threshold to consider a scalar as null.
+              fp64_t MPF_robust_threshold = 0.001;  // Threshold for the implementation of the RMPF.
 
               double max_speed;           // Maximum speed command to send to AutoPilot
               double min_speed;           // Minimum speed command to send to AutoPilot
               double max_omega;           // Maximum angular velocity command to send to AutoPilot
               double min_omega;           // Minimum angular velocity command to send to AutoPilot
+              double k_eta;               // Gain for MPF correction error signal
+              double dead_zone;           // Dead zone for the hyperbolic tangent on the MPF correction error signal
+              double tau = 0.001;         // Pole of the linear, first order velocity estimator
+              double rho;                 // Gain for the robust MPF controller.
 
-              std::string path_type_name; // Type of path we want to define
+              std::string pathType; // Type of path we want to define
+              std::string estimatorType;  // Type of estimator for the target velocity
+
               int path_type;              // Integer for the path type
+              int estimator_type;         // Integer for the estimator type
+
               bool isFollowing;           // True if the controller is trying to follow some external vehicle
+              bool compVel;               // True if target velocity is being compensated
+
           } m_ctrl_params;
 
           struct ControlVariables {
               double gamma_ref;    // Along track desired  speed reference (longitudinal velocity)
+
               Matrix Pd;           // Desired path vector parametrization
               Matrix grad_Pd;      // Derivative of the path with respect to gamma
               Matrix P_ref;        // Control reference for the vehicle position
@@ -84,6 +92,8 @@ namespace Control
               Matrix World_error;  // MPF error in world coordinates
               Matrix Eps;          // Constant MPF vector
               Matrix cmd;          // Control signal
+              Matrix robust;       // Robustness term
+
               fp64_t gamma; 	   // Path variable or coordination state
               fp64_t gamma_dot;    // Time derivative of the path variable
               fp64_t g_err;        // MPF error correction signal
@@ -91,10 +101,12 @@ namespace Control
 
           struct PathParams {
               Matrix offset;        // Offset vector from the target
-              double r;             // If path is a circle, r is the radius
               Coord ampl;           // If path is an ellipse, ampl.x, ampl.y are the amplitudes in the respective axes
+
+              double r;             // If path is a circle, r is the radius
               double lampl;         // Amplitude of the lemniscate path
               double lomega;        // Frequency of the lemniscate path
+
               bool make8orInf;      // True if lemnscate main axis is the y-direction (Inf form); False otherwise (8 form)
           } m_path_params;
 
@@ -105,11 +117,17 @@ namespace Control
           } m_target_params;
 
           struct TargetState {
-              Matrix Pt;                // Target inertial position.
-              Matrix dPt;               // Target inertial velocity.
-              Matrix Rt;                // Inertial rotation matrix.
-              Coord start, end;         // Start and end points.
-              double distanceTillEnd;   // Distance till the end.
+              Coord start, end;             // Start and end points.
+
+              Matrix Pt;                    // Target inertial position.
+              Matrix dPt;                   // Target inertial velocity.
+              Matrix Rt;                    // Inertial rotation matrix.
+
+              double distanceTillEnd;               // Distance till the end.
+              double target_positions_x[2] = {0,0}; // Temporal series for the target x-positions
+              double target_positions_y[2] = {0,0}; // Temporal series for the target y-positions
+              double target_velocites_x[2] = {0,0}; // Temporal series for the target x-velocities
+              double target_velocites_y[2] = {0,0}; // Temporal series for the target y-velocities
           } m_target_es;
 
           struct VehicleState {
@@ -148,14 +166,6 @@ namespace Control
                       .defaultValue("0.3")
                       .description("Desired speed of the vehicle around the path, in m/s");
 
-              param("Faulty", m_ctrl_params.faulty)
-                      .defaultValue("0")
-                      .description("Simulate fault");
-
-              param("Faulty Speed", m_ctrl_params.faulty_speed)
-                      .defaultValue("0.5")
-                      .description("fault speed");
-
               param("Maximum Speed", m_ctrl_params.max_speed)
                       .defaultValue("2.0")
                       .description("Maximum speed command to send to AutoPilot.");
@@ -172,7 +182,7 @@ namespace Control
                       .defaultValue("-1.0")
                       .description("Minimum angular velocity command to send to AutoPilot.");
 
-              param("Desired Path", m_ctrl_params.path_type_name)
+              param("Desired Path", m_ctrl_params.pathType)
                       .defaultValue("circle")
                       .description("Defines the type of path around the moving target. Can be (i) circle, (ii) ellipse, (iii) lemniscate");
 
@@ -207,6 +217,18 @@ namespace Control
               param("Target Name", m_target_params.name)
                       .defaultValue("lauv-noptilus-1")
                       .description("Name of the target vehicle.");
+
+              param("Compensate Velocity?", m_ctrl_params.compVel)
+                      .defaultValue("false")
+                      .description("True if the target velocity is being compensated.");
+
+              param("Velocity Estimator", m_ctrl_params.estimatorType)
+                      .defaultValue("Finite Diff")
+                      .description("Type of estimator for the target velocity.");
+
+              param("Rho Gain", m_ctrl_params.rho)
+                      .defaultValue("0.0")
+                      .description("Gain for the robustness term.");
 
               bind<IMC::TargetState>(this);
           }
@@ -244,15 +266,15 @@ namespace Control
             m_ctrl_var.Eps = tempEpsVector;
 
             // Initialize the choosen path type
-            if (m_ctrl_params.path_type_name == "circle") {
+            if (m_ctrl_params.pathType == "circle") {
                 inf("Circular path was chosen.");
                 m_ctrl_params.path_type = 1; // Do a circle
             }
-            else if (m_ctrl_params.path_type_name == "ellipse") {
+            else if (m_ctrl_params.pathType == "ellipse") {
                 inf("Elliptical path was chosen.");
                 m_ctrl_params.path_type = 2; // Do a ellipse
             }
-            else if (m_ctrl_params.path_type_name == "lemniscate") {
+            else if (m_ctrl_params.pathType == "lemniscate") {
                 inf("Elliptical path was chosen.");
                 m_ctrl_params.path_type = 3; // Do a lemniscate
             }
@@ -260,22 +282,46 @@ namespace Control
                 inf("GotoPoint controller was chosen (path is a single point).");
                 m_ctrl_params.path_type = 0; // Just GotoPoint
             }
+            // Computes targetID and initiallizes target position
+            m_target_params.ID = resolveSystemName(m_target_params.name);
+            m_target_es.Pt = temp2DzeroVector;
+            m_target_es.dPt = temp2DzeroVector;
 
-            // Computes targetID if controller is in follower mode
-            if (m_ctrl_params.isFollowing)
-                m_target_params.ID = resolveSystemName(m_target_params.name);
-            else {
-                m_target_es.Pt = temp2DzeroVector;
-                m_target_es.dPt = temp2DzeroVector;
+            // Choose the velocity estimator
+            if (m_ctrl_params.compVel) {
+                if (m_ctrl_params.estimatorType == "Finite Diff") {
+                    inf("Vel. estimation: finite differences chosen.");
+                    m_ctrl_params.estimator_type = 1;
+                }
+                else if (m_ctrl_params.estimatorType == "Filter") {
+                    inf("Vel. estimation: first order linear filter chosen.");
+                    m_ctrl_params.estimator_type = 2;
+                }
+                else if (m_ctrl_params.estimatorType == "Sliding Mode") {
+                    inf("Vel. estimation: sliding mode chosen.");
+                    m_ctrl_params.estimator_type = 3;
+                }
+                else
+                    m_ctrl_params.estimator_type = 1;
             }
         }
 
+        //! Activates at the beginning of the path.
         void
         onPathStartup(const IMC::EstimatedState& state, const TrackingState& ts)
         {
             inf("Path startup!");
             //inf("Chosen path is ", m_ctrl_params.path_type);
             onUpdateParameters();
+
+            // If the vehicle is the target, dispatch its coordinates (NED).
+            if ( getSystemId() == m_target_params.ID ) {
+                m_target_state.x = state.x;
+                m_target_state.y = state.y;
+                m_target_state.lat = m_estate.lat;
+                m_target_state.lon = m_estate.lon;
+                dispatch(m_target_state);
+            }
 
             // Reset gamma here according to the objective quadrant.
             m_ctrl_var.gamma = 0.0;
@@ -291,6 +337,12 @@ namespace Control
                 Matrix tempdPtVec(tempdPt, 2, 1);
                 m_target_es.dPt = tempdPtVec;
             }
+
+            // Initialize filter variables with the current target position
+            m_target_es.target_positions_x[0] = m_target_es.Pt(0,0);
+            m_target_es.target_positions_y[0] = m_target_es.Pt(1,0);
+            m_target_es.target_velocites_x[0] = 0.0;
+            m_target_es.target_velocites_y[0] = 0.0;
 
             // Logs
             inf("Target initial position = (%f, %f)", m_target_es.Pt(0,0), m_target_es.Pt(1,0));
@@ -310,7 +362,7 @@ namespace Control
             enableControlLoops(IMC::CL_SPEED | IMC::CL_YAW_RATE);
             //enableControlLoops(IMC::CL_SPEED | IMC::CL_YAW_RATE | IMC::CL_DEPTH);
 
-            inf("Executing MPF controller.");
+            inf("Executing MPF-epsilon controller.");
         }
 
         //! This function computes the shape of the path.
@@ -383,8 +435,16 @@ namespace Control
             Matrix tempRvVec(tempRv, 2, 2);
             m_state.Rv = tempRvVec;
 
+            // If I am the target, dispatch my GPS coordinates (WSG84).
+            if ( getSystemId() == m_target_params.ID ) {
+                m_target_state.x = state->x;
+                m_target_state.y = state->y;
+                m_target_state.lat = m_estate.lat;
+                m_target_state.lon = m_estate.lon;
+                dispatch(m_target_state);
+            }
+
             inf("Vehicle position = (%f, %f)", m_state.Pv(0,0), m_state.Pv(1,0));
-            //inf("Rv = (%f, %f)/(%f, %f)", m_state.Rv(0,0), m_state.Rv(0,1), m_state.Rv(1,0), m_state.Rv(1,1));
         }
 
         //! Updates the state of the path variable gamma.
@@ -400,12 +460,37 @@ namespace Control
         }
 
         //! Estimate target velocity.
-        //! For now, just get the velocity from the target.
-        //! Latter, we should use an estimator.
         void
-        estimateTargetVelocity(const IMC::TargetState* target_state)
+        estimateTargetVelocity(const TrackingState* ts)
         {
-            double tempdPt[2] = {target_state->vx, target_state->vy};
+            double h = ts->delta;
+            double tau = 0.01;
+
+            // Initialize filter variables with the current target position
+            m_target_es.target_positions_x[1] = m_target_es.Pt(0,0);
+            m_target_es.target_positions_y[1] = m_target_es.Pt(1,0);
+
+            // Compute next velocity
+            switch (m_ctrl_params.estimator_type) {
+            case 1:
+                m_target_es.target_velocites_x[1] = (1/h)*(m_target_es.target_positions_x[1] - m_target_es.target_positions_x[0]);
+                m_target_es.target_velocites_y[1] = (1/h)*(m_target_es.target_positions_y[1] - m_target_es.target_positions_y[0]);
+            case 2:
+                m_target_es.target_velocites_x[1] = (1/(h+2*tau))*( -(h-2*tau)*m_target_es.target_velocites_x[0] + 2*(m_target_es.target_positions_x[1] - m_target_es.target_positions_x[0]) );
+                m_target_es.target_velocites_y[1] = (1/(h+2*tau))*( -(h-2*tau)*m_target_es.target_velocites_y[0] + 2*(m_target_es.target_positions_y[1] - m_target_es.target_positions_y[0]) );
+            default:
+                m_target_es.target_velocites_x[1] = (1/h)*(m_target_es.target_positions_x[1] - m_target_es.target_positions_x[0]);
+                m_target_es.target_velocites_y[1] = (1/h)*(m_target_es.target_positions_y[1] - m_target_es.target_positions_y[0]);
+            }
+
+            // Update current positions and velocities
+            m_target_es.target_positions_x[0] = m_target_es.target_positions_x[1];
+            m_target_es.target_positions_y[0] = m_target_es.target_positions_y[1];
+
+            m_target_es.target_velocites_x[0] = m_target_es.target_velocites_x[1];
+            m_target_es.target_velocites_y[0] = m_target_es.target_velocites_y[1];
+
+            double tempdPt[2] = {m_target_es.target_velocites_x[1], m_target_es.target_velocites_y[1]};
             Matrix tempdPtVec(tempdPt, 2, 1);
             m_target_es.dPt = tempdPtVec;
         }
@@ -419,12 +504,7 @@ namespace Control
                 Matrix tempPtVec(tempPt, 2, 1);
                 m_target_es.Pt = tempPtVec;
 
-                // Estimate target velocity
-                estimateTargetVelocity(target_state);
-
-                // Logs
-                inf("Target position = (%f, %f)", target_state->x, target_state->y);
-                inf("Target velocity = (%f, %f)", target_state->vx, target_state->vy);
+                //inf("Target GPS = (%f,%f)", m_estate.lat, m_estate.lon);
             }
         }
 
@@ -442,13 +522,22 @@ namespace Control
             // Computes actual state of the vehicle
             computeVehicleState(&state);
 
+            // Estimate target velocity
+            if ( m_ctrl_params.compVel )
+                estimateTargetVelocity(&ts);
+
             // Compute the desired reference position
             m_ctrl_var.P_ref = m_target_es.Pt + m_ctrl_var.Pd;
             m_ctrl_var.dP_ref = m_target_es.dPt + m_ctrl_var.grad_Pd*m_ctrl_var.gamma_dot;
 
-//            inf("Reference = (%f, %f)", m_ctrl_var.P_ref(0,0), m_ctrl_var.P_ref(1,0));
-//            inf("Ref. - Target = (%f, %f)", m_ctrl_var.P_ref(0,0) - m_target_es.Pt(0,0), m_ctrl_var.P_ref(1,0) - m_target_es.Pt(1,0));
-//            inf("Desired pos = (%f, %f)", m_ctrl_var.Pd(0,0), m_ctrl_var.Pd(1,0));
+            // inf("Reference = (%f, %f)", m_ctrl_var.P_ref(0,0), m_ctrl_var.P_ref(1,0));
+            // inf("Ref. - Target = (%f, %f)", m_ctrl_var.P_ref(0,0) - m_target_es.Pt(0,0), m_ctrl_var.P_ref(1,0) - m_target_es.Pt(1,0));
+            // inf("Desired pos = (%f, %f)", m_ctrl_var.Pd(0,0), m_ctrl_var.Pd(1,0));
+
+            if ( getSystemId() != m_target_params.ID ) {
+                inf("Target position = (%f, %f)", m_target_es.Pt(0,0), m_target_es.Pt(1,0));
+                inf("Target velocity = (%f, %f)", m_target_es.dPt(0,0), m_target_es.dPt(1,0));
+            }
 
             // Update errors (world and local coordinates)
             m_ctrl_var.World_error = m_state.Pv - m_ctrl_var.P_ref;
@@ -458,21 +547,27 @@ namespace Control
 
             // Update the MPF error correction signal g_err
             double eta;
-            Matrix etaM;
-//            double tempZeroMatrix = 0;
-//            Matrix zeroMatrix(tempZeroMatrix,1,1);
             double norm_gradPd = m_ctrl_var.grad_Pd.norm_2();
             if ( norm_gradPd > m_ctrl_params.zero_threshold ) {
-                etaM = -transpose(m_ctrl_var.MPF_error)*((transpose(m_state.Rv)*(m_ctrl_var.grad_Pd/norm_gradPd)));
+                Matrix etaM = -transpose(m_ctrl_var.MPF_error)*((transpose(m_state.Rv)*(m_ctrl_var.grad_Pd/norm_gradPd)));
                 eta = etaM(0,0);
             }
             else
                 eta = 0;
             m_ctrl_var.g_err = -m_ctrl_params.k_eta*m_ctrl_var.gamma_ref*(tanh(eta+m_ctrl_params.dead_zone) + tanh(eta-m_ctrl_params.dead_zone));
-            //m_ctrl_var.g_err = -m_ctrl_params.k_eta*eta;
+            //m_ctrl_var.g_err = -m_ctrl_params.kdouble norm_gradPd = m_ctrl_var.grad_Pd.norm_2();_eta*eta;
+
+            // Compute the robustness term
+            double den;
+            double norm_MPF_error = m_ctrl_var.MPF_error.norm_2();
+            if ( norm_MPF_error >= m_ctrl_params.MPF_robust_threshold )
+                den = norm_MPF_error;
+            else
+                den = m_ctrl_params.MPF_robust_threshold;
+            m_ctrl_var.robust = m_ctrl_params.rho*( m_ctrl_var.MPF_error/den );
 
             // Path Following controller 1: without saturation in control law
-            m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.MPF_error + transpose(m_state.Rv)*m_ctrl_var.dP_ref);
+            m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.MPF_error + transpose(m_state.Rv)*m_ctrl_var.dP_ref - m_ctrl_var.robust);
 
             // Path Following controller 2: with saturation in terms of tanh
             //m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.SatMPF_error + transpose(m_state.Rv)*m_ctrl_var.dP_ref);
