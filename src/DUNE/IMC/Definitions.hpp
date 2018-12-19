@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 10dd33b2beb0db6eacc07ab3cc5d66c5                            *
+// IMC XML MD5: 69c3cb090afe3a9831f7621d6b723ff3                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -24981,10 +24981,14 @@ namespace DUNE
       fp32_t x;
       //! y coordinate.
       fp32_t y;
+      //! z coordinate.
+      fp32_t z;
       //! x velocity.
       fp32_t vx;
       //! y velocity.
       fp32_t vy;
+      //! z velocity.
+      fp32_t vz;
       //! Depth.
       uint8_t depth;
       //! Speed.
@@ -25039,7 +25043,142 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 33;
+        return 41;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! MPF Variables.
+    class MPFVariables: public Message
+    {
+    public:
+      //! Longituginal velocity command.
+      fp32_t ctrl_cmd_v;
+      //! Angular velocity command.
+      fp32_t ctrl_cmd_omega;
+      //! Saturated lon. velocity command.
+      fp32_t sat_ctrl_cmd_v;
+      //! Saturated ang. velocity command.
+      fp32_t sat_ctrl_cmd_omega;
+      //! Longituginal SMC signal for robustness.
+      fp32_t robust_v;
+      //! Angular SMC signal for robustness.
+      fp32_t robust_omega;
+      //! Path variable gamma.
+      fp32_t gamma;
+      //! Path variable speed.
+      fp32_t gamma_dot;
+      //! PF Correction.
+      fp32_t g_err;
+      //! Target position x.
+      fp32_t target_x;
+      //! Target position y.
+      fp32_t target_y;
+      //! Target position z.
+      fp32_t target_z;
+      //! Target velocity vx.
+      fp32_t target_vx;
+      //! Target velocity vy.
+      fp32_t target_vy;
+      //! Target velocity vz.
+      fp32_t target_vz;
+      //! Vehicle position x.
+      fp32_t x;
+      //! Vehicle position y.
+      fp32_t y;
+      //! Vehicle position z.
+      fp32_t z;
+      //! Vehicle velocity x.
+      fp32_t vx;
+      //! Vehicle velocity y.
+      fp32_t vy;
+      //! Vehicle velocity z.
+      fp32_t vz;
+      //! Local reference Pd_x.
+      fp32_t pd_x;
+      //! Local reference Pd_y.
+      fp32_t pd_y;
+      //! Reference P_ref_x.
+      fp32_t p_ref_x;
+      //! Reference P_ref_y.
+      fp32_t p_ref_y;
+      //! MPF Error Norm.
+      fp32_t norm_mpf_err;
+      //! MPF Error x.
+      fp32_t mpf_err_x;
+      //! MPF Error y.
+      fp32_t mpf_err_y;
+      //! MPF Error z.
+      fp32_t mpf_err_z;
+      //! World Error x.
+      fp32_t err_x;
+      //! World Error y.
+      fp32_t err_y;
+      //! World Error z.
+      fp32_t err_z;
+      //! Tracking state start x.
+      fp32_t start_x;
+      //! Tracking state start y.
+      fp32_t start_y;
+      //! Tracking state start z.
+      fp32_t start_z;
+      //! Tracking state end x.
+      fp32_t end_x;
+      //! Tracking state end y.
+      fp32_t end_y;
+      //! Tracking state end z.
+      fp32_t end_z;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 910;
+      }
+
+      MPFVariables(void);
+
+      MPFVariables*
+      clone(void) const
+      {
+        return new MPFVariables(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return MPFVariables::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "MPFVariables";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 152;
       }
 
       void

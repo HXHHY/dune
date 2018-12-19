@@ -43,12 +43,13 @@ namespace Control
       {
           IMC::DesiredSpeed m_speed_cmd;                 // Desired speed command(body coordinates)
           IMC::DesiredHeadingRate m_hrate_cmd;           // Desired heading rate
-          IMC::TargetState m_target_state;                  // Target state
-          //IMC::DesiredZ m_depth_cmd;                     // Desired depth
+          IMC::TargetState m_target_state;               // Target state
+          IMC::MPFVariables MPFVar;
+          // IMC::DesiredZ m_depth_cmd;                     // Desired depth
 
           struct Coord {
-              double x;
-              double y;
+              fp64_t x;
+              fp64_t y;
           };
 
           struct ControlParams {
@@ -59,7 +60,7 @@ namespace Control
               fp32_t dt;                            // Control period
               fp64_t epsilon;                       // epsilon error
               fp64_t zero_threshold = 0.001;        // Internal threshold to consider a scalar as null.
-              fp64_t MPF_robust_threshold = 0.001;  // Threshold for the implementation of the RMPF.
+              fp64_t epsilon_w;                     // Threshold for the implementation of the RMPF.
 
               double max_speed;           // Maximum speed command to send to AutoPilot
               double min_speed;           // Minimum speed command to send to AutoPilot
@@ -67,7 +68,7 @@ namespace Control
               double min_omega;           // Minimum angular velocity command to send to AutoPilot
               double k_eta;               // Gain for MPF correction error signal
               double dead_zone;           // Dead zone for the hyperbolic tangent on the MPF correction error signal
-              double tau = 0.001;         // Pole of the linear, first order velocity estimator
+              double tau = 0.0001;        // Pole of the linear, first order velocity estimator
               double rho;                 // Gain for the robust MPF controller.
 
               std::string pathType; // Type of path we want to define
@@ -77,7 +78,9 @@ namespace Control
               int estimator_type;         // Integer for the estimator type
 
               bool isFollowing;           // True if the controller is trying to follow some external vehicle
+              bool isTargetSimulated;     // True if the target is simply the TrackingState.
               bool compVel;               // True if target velocity is being compensated
+              bool use_controller;        // Flag to use MPF as controller.
 
           } m_ctrl_params;
 
@@ -113,17 +116,18 @@ namespace Control
           struct TargetParams {
               std::string name;     // Name of the target vehicle
               unsigned ID;          // ID of the target vehicle in DUNE
-              double tol;           // Tolerance to the end.
+              double tol;           // Tolerance to the end
           } m_target_params;
 
           struct TargetState {
-              Coord start, end;             // Start and end points.
+              Coord start, end;             // Start and end points
+              Coord NED;                    // NED coordinates of the target (North and West)
 
-              Matrix Pt;                    // Target inertial position.
-              Matrix dPt;                   // Target inertial velocity.
-              Matrix Rt;                    // Inertial rotation matrix.
+              Matrix Pt;                    // Target inertial position
+              Matrix dPt;                   // Target inertial velocity
+              Matrix Rt;                    // Inertial rotation matrix
 
-              double distanceTillEnd;               // Distance till the end.
+              double distanceTillEnd;               // Distance till the end
               double target_positions_x[2] = {0,0}; // Temporal series for the target x-positions
               double target_positions_y[2] = {0,0}; // Temporal series for the target y-positions
               double target_velocites_x[2] = {0,0}; // Temporal series for the target x-velocities
@@ -134,6 +138,9 @@ namespace Control
               Matrix Pv;                // Target inertial position.
               Matrix dPv;               // Target inertial velocity.
               Matrix Rv;                // Inertial rotation matrix.
+              fp64_t lat;
+              fp64_t lon;
+              Coord NED;                // NED coordinates of the vehicle (North and West)
           } m_state;
 
           //! Constructor.
@@ -167,7 +174,7 @@ namespace Control
                       .description("Desired speed of the vehicle around the path, in m/s");
 
               param("Maximum Speed", m_ctrl_params.max_speed)
-                      .defaultValue("2.0")
+                      .defaultValue("2.1")
                       .description("Maximum speed command to send to AutoPilot.");
 
               param("Minimum Speed", m_ctrl_params.min_speed)
@@ -212,23 +219,37 @@ namespace Control
 
               param("Is it following?", m_ctrl_params.isFollowing)
                       .defaultValue("false")
-                      .description("True if the target is another vehicle");
+                      .description("True if the target is another vehicle.");
 
               param("Target Name", m_target_params.name)
                       .defaultValue("lauv-noptilus-1")
                       .description("Name of the target vehicle.");
 
-              param("Compensate Velocity?", m_ctrl_params.compVel)
+              param("Is simulating target?", m_ctrl_params.isTargetSimulated)
+                      .defaultValue("true")
+                      .description("True if the target is simply the TrackingState.");
+
+              param("Estimate Velocity?", m_ctrl_params.compVel)
                       .defaultValue("false")
                       .description("True if the target velocity is being compensated.");
 
               param("Velocity Estimator", m_ctrl_params.estimatorType)
-                      .defaultValue("Finite Diff")
+                      .defaultValue("Use Local")
                       .description("Type of estimator for the target velocity.");
 
               param("Rho Gain", m_ctrl_params.rho)
                       .defaultValue("0.0")
                       .description("Gain for the robustness term.");
+
+              param("Epsilon Robust", m_ctrl_params.epsilon_w)
+                      .defaultValue("1.0")
+                      .description("Threshold for the robustness term.");
+
+              param("Use Controller", m_ctrl_params.use_controller)
+                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+                      .scope(Tasks::Parameter::SCOPE_MANEUVER)
+                      .defaultValue("false")
+                      .description("Use MPF as path controller.");
 
               bind<IMC::TargetState>(this);
           }
@@ -239,6 +260,8 @@ namespace Control
         {
             // parameters were set
             PathController::onUpdateParameters();
+
+            inf(DTR("My name is %s, ID %d"), getSystemName(), getSystemId());
 
             // Necessary variables for control computation
             double temp_delta[4] = {1.0, 0.0, 0.0, m_ctrl_params.epsilon};
@@ -275,7 +298,7 @@ namespace Control
                 m_ctrl_params.path_type = 2; // Do a ellipse
             }
             else if (m_ctrl_params.pathType == "lemniscate") {
-                inf("Elliptical path was chosen.");
+                inf("Lemniscate path was chosen.");
                 m_ctrl_params.path_type = 3; // Do a lemniscate
             }
             else {
@@ -287,19 +310,25 @@ namespace Control
             m_target_es.Pt = temp2DzeroVector;
             m_target_es.dPt = temp2DzeroVector;
 
+            inf(DTR("Target ID is %d"), m_target_params.ID);
+
             // Choose the velocity estimator
             if (m_ctrl_params.compVel) {
-                if (m_ctrl_params.estimatorType == "Finite Diff") {
-                    inf("Vel. estimation: finite differences chosen.");
+                if (m_ctrl_params.estimatorType == "Use Local") {
+                    inf("Vel. estimation: using local target velocity.");
                     m_ctrl_params.estimator_type = 1;
+                }
+                else if (m_ctrl_params.estimatorType == "Finite Diff") {
+                    inf("Vel. estimation: finite differences chosen.");
+                    m_ctrl_params.estimator_type = 2;
                 }
                 else if (m_ctrl_params.estimatorType == "Filter") {
                     inf("Vel. estimation: first order linear filter chosen.");
-                    m_ctrl_params.estimator_type = 2;
+                    m_ctrl_params.estimator_type = 3;
                 }
                 else if (m_ctrl_params.estimatorType == "Sliding Mode") {
                     inf("Vel. estimation: sliding mode chosen.");
-                    m_ctrl_params.estimator_type = 3;
+                    m_ctrl_params.estimator_type = 4;
                 }
                 else
                     m_ctrl_params.estimator_type = 1;
@@ -314,12 +343,14 @@ namespace Control
             //inf("Chosen path is ", m_ctrl_params.path_type);
             onUpdateParameters();
 
-            // If the vehicle is the target, dispatch its coordinates (NED).
+            // If the vehicle is the target, dispatch its coordinates.
             if ( getSystemId() == m_target_params.ID ) {
                 m_target_state.x = state.x;
                 m_target_state.y = state.y;
-                m_target_state.lat = m_estate.lat;
-                m_target_state.lon = m_estate.lon;
+                m_target_state.lat = state.lat;
+                m_target_state.lon = state.lon;
+                m_target_state.vx = state.vx;
+                m_target_state.vy = state.vy;
                 dispatch(m_target_state);
             }
 
@@ -333,16 +364,26 @@ namespace Control
                 Matrix tempPtVec(tempPt, 2, 1);
                 m_target_es.Pt = tempPtVec;
 
-                double tempdPt[2] = {0, 0};
+                double temp2Dzeros[2] = {0.0, 0.0};
+                Matrix temp2DzeroVector(temp2Dzeros,2,1);
+                m_target_es.dPt = temp2DzeroVector;
+            }
+            // If it is, and the target is being simulated, target is TrackingState position
+            else if (m_ctrl_params.isTargetSimulated) {
+                double tempPt[2] = {ts.track_pos.x, ts.track_pos.y};
+                Matrix tempPtVec(tempPt, 2, 1);
+                m_target_es.Pt = tempPtVec;
+
+                double tempdPt[2] = {ts.track_vel.x, ts.track_vel.y};
                 Matrix tempdPtVec(tempdPt, 2, 1);
                 m_target_es.dPt = tempdPtVec;
             }
 
             // Initialize filter variables with the current target position
-            m_target_es.target_positions_x[0] = m_target_es.Pt(0,0);
-            m_target_es.target_positions_y[0] = m_target_es.Pt(1,0);
-            m_target_es.target_velocites_x[0] = 0.0;
-            m_target_es.target_velocites_y[0] = 0.0;
+            //m_target_es.target_positions_x[0] = m_target_es.Pt(0,0);
+            //m_target_es.target_positions_y[0] = m_target_es.Pt(1,0);
+            //m_target_es.target_velocites_x[0] = 0.0;
+            //m_target_es.target_velocites_y[0] = 0.0;
 
             // Logs
             inf("Target initial position = (%f, %f)", m_target_es.Pt(0,0), m_target_es.Pt(1,0));
@@ -358,11 +399,22 @@ namespace Control
         void
         onPathActivation(void)
         {
+            if (!m_ctrl_params.use_controller)
+                return;
+
             // Activate controllers.
             enableControlLoops(IMC::CL_SPEED | IMC::CL_YAW_RATE);
             //enableControlLoops(IMC::CL_SPEED | IMC::CL_YAW_RATE | IMC::CL_DEPTH);
 
             inf("Executing MPF-epsilon controller.");
+        }
+
+        void
+        onPathDeactivation(void)
+        {
+            m_target_state.vx = 0.0;
+            m_target_state.vy = 0.0;
+            dispatch(m_target_state);
         }
 
         //! This function computes the shape of the path.
@@ -418,7 +470,6 @@ namespace Control
             double tempGradPt[2] = {grad_Pdx, grad_Pdy};
             Matrix tempGradPtVec(tempGradPt, 2, 1);
             m_ctrl_var.grad_Pd = tempGradPtVec;
-
         }
 
         //! This function computes the vehicle state.
@@ -430,21 +481,40 @@ namespace Control
             Matrix tempPvVec(tempPv, 2, 1);
             m_state.Pv = tempPvVec;
 
+            m_state.lat = state->lat;
+            m_state.lon = state->lon;
+
             // Compute vehicle rotation matrix
             double tempRv[4] = {std::cos(state->psi), -std::sin(state->psi), std::sin(state->psi), std::cos(state->psi)};
             Matrix tempRvVec(tempRv, 2, 2);
             m_state.Rv = tempRvVec;
 
-            // If I am the target, dispatch my GPS coordinates (WSG84).
+            // Compute vehicle velocity
+            double tempdPv[2] = {state->vx, state->vy};
+            Matrix tempdPvVec(tempdPv, 2, 1);
+            m_state.dPv = tempdPvVec;
+
+            // Compute the initial NED displacement of the vehicle
+            WGS84::displacement(0, 0, 0,
+                                state->lat, state->lon, 0,
+                                &m_state.NED.x, &m_state.NED.y);
+
+            // If vehicle is also the target, dispatch its GPS coordinates (WSG84).
             if ( getSystemId() == m_target_params.ID ) {
                 m_target_state.x = state->x;
                 m_target_state.y = state->y;
-                m_target_state.lat = m_estate.lat;
-                m_target_state.lon = m_estate.lon;
+                m_target_state.z = state->z;
+                m_target_state.lat = state->lat;
+                m_target_state.lon = state->lon;
+                m_target_state.vx = state->vx;
+                m_target_state.vy = state->vy;
+                m_target_state.vz = state->vz;
                 dispatch(m_target_state);
             }
 
             inf("Vehicle position = (%f, %f)", m_state.Pv(0,0), m_state.Pv(1,0));
+            inf("Vehicle velocity = (%f, %f)", state->vx, state->vy);
+            inf("Vehicle NED = (%f, %f)", m_state.NED.x, m_state.NED.y);
         }
 
         //! Updates the state of the path variable gamma.
@@ -459,52 +529,73 @@ namespace Control
             inf("Gamma = %f", m_ctrl_var.gamma);
         }
 
-        //! Estimate target velocity.
-        void
-        estimateTargetVelocity(const TrackingState* ts)
-        {
-            double h = ts->delta;
-            double tau = 0.01;
+//        //! Estimate target velocity.
+//        void
+//        estimateTargetVelocity(const TrackingState* ts)
+//        {
+//            double h = ts->delta;
+//            double tau = 0.01;
 
-            // Initialize filter variables with the current target position
-            m_target_es.target_positions_x[1] = m_target_es.Pt(0,0);
-            m_target_es.target_positions_y[1] = m_target_es.Pt(1,0);
+//            // Initialize filter variables with the current target position
+//            m_target_es.target_positions_x[1] = m_target_es.Pt(0,0);
+//            m_target_es.target_positions_y[1] = m_target_es.Pt(1,0);
 
-            // Compute next velocity
-            switch (m_ctrl_params.estimator_type) {
-            case 1:
-                m_target_es.target_velocites_x[1] = (1/h)*(m_target_es.target_positions_x[1] - m_target_es.target_positions_x[0]);
-                m_target_es.target_velocites_y[1] = (1/h)*(m_target_es.target_positions_y[1] - m_target_es.target_positions_y[0]);
-            case 2:
-                m_target_es.target_velocites_x[1] = (1/(h+2*tau))*( -(h-2*tau)*m_target_es.target_velocites_x[0] + 2*(m_target_es.target_positions_x[1] - m_target_es.target_positions_x[0]) );
-                m_target_es.target_velocites_y[1] = (1/(h+2*tau))*( -(h-2*tau)*m_target_es.target_velocites_y[0] + 2*(m_target_es.target_positions_y[1] - m_target_es.target_positions_y[0]) );
-            default:
-                m_target_es.target_velocites_x[1] = (1/h)*(m_target_es.target_positions_x[1] - m_target_es.target_positions_x[0]);
-                m_target_es.target_velocites_y[1] = (1/h)*(m_target_es.target_positions_y[1] - m_target_es.target_positions_y[0]);
-            }
+//            // Compute next velocity
+//            switch (m_ctrl_params.estimator_type) {
+//            case 1:
+//                m_target_es.target_velocites_x[1] = m_target_state.vx;
+//                m_target_es.target_velocites_y[1] = m_target_state.vy;
+//            case 2:
+//                m_target_es.target_velocites_x[1] = (1/h)*(m_target_es.target_positions_x[1] - m_target_es.target_positions_x[0]);
+//                m_target_es.target_velocites_y[1] = (1/h)*(m_target_es.target_positions_y[1] - m_target_es.target_positions_y[0]);
+//                break;
+//            case 3:
+//                m_target_es.target_velocites_x[1] = (1/(h+2*tau))*( -(h-2*tau)*m_target_es.target_velocites_x[0] + 2*(m_target_es.target_positions_x[1] - m_target_es.target_positions_x[0]) );
+//                m_target_es.target_velocites_y[1] = (1/(h+2*tau))*( -(h-2*tau)*m_target_es.target_velocites_y[0] + 2*(m_target_es.target_positions_y[1] - m_target_es.target_positions_y[0]) );
+//                break;
+//            default:
+//                m_target_es.target_velocites_x[1] = (1/h)*(m_target_es.target_positions_x[1] - m_target_es.target_positions_x[0]);
+//                m_target_es.target_velocites_y[1] = (1/h)*(m_target_es.target_positions_y[1] - m_target_es.target_positions_y[0]);
+//            }
 
-            // Update current positions and velocities
-            m_target_es.target_positions_x[0] = m_target_es.target_positions_x[1];
-            m_target_es.target_positions_y[0] = m_target_es.target_positions_y[1];
+//            // Update current positions and velocities
+//            m_target_es.target_positions_x[0] = m_target_es.target_positions_x[1];
+//            m_target_es.target_positions_y[0] = m_target_es.target_positions_y[1];
 
-            m_target_es.target_velocites_x[0] = m_target_es.target_velocites_x[1];
-            m_target_es.target_velocites_y[0] = m_target_es.target_velocites_y[1];
+//            m_target_es.target_velocites_x[0] = m_target_es.target_velocites_x[1];
+//            m_target_es.target_velocites_y[0] = m_target_es.target_velocites_y[1];
 
-            double tempdPt[2] = {m_target_es.target_velocites_x[1], m_target_es.target_velocites_y[1]};
-            Matrix tempdPtVec(tempdPt, 2, 1);
-            m_target_es.dPt = tempdPtVec;
-        }
+//            double tempdPt[2] = {m_target_es.target_velocites_x[1], m_target_es.target_velocites_y[1]};
+//            // double tempdPt[2] = {m_target_state.vx, m_target_state.vy};
+//            Matrix tempdPtVec(tempdPt, 2, 1);
+//            m_target_es.dPt = tempdPtVec;
+//        }
 
         //! Consumer for a TargetState message
         void
         consume(const IMC::TargetState* target_state)
         {
+            // Compute target position wrt the follower
             if (target_state->getSource() == m_target_params.ID) {
+
+                // Compute the initial NED displacement of the vehicle
+                WGS84::displacement(target_state->lat, target_state->lon, 0,
+                                    m_state.lat, m_state.lon, 0,
+                                    &m_target_es.NED.x, &m_target_es.NED.y);
+
+//                double tempPtx = m_target_state.x + (m_target_es.NED.x - m_state.NED.x);
+//                double tempPty = m_target_state.y + (m_target_es.NED.y - m_state.NED.y);
                 double tempPt[2] = {target_state->x, target_state->y};
                 Matrix tempPtVec(tempPt, 2, 1);
                 m_target_es.Pt = tempPtVec;
 
-                //inf("Target GPS = (%f,%f)", m_estate.lat, m_estate.lon);
+                if (m_ctrl_params.compVel) {
+                    double tempdPt[2] = {target_state->vx, target_state->vy};
+                    Matrix tempdPtVec(tempdPt, 2, 1);
+                    m_target_es.dPt = tempdPtVec;
+                }
+//                inf("Delta0 = (%f,%f)", m_target_es.NED.x - m_state.NED.x, m_target_es.NED.y - m_state.NED.y);
+//                inf("InitialState = (%f,%f)", m_state.NED.x, m_state.NED.y);
             }
         }
 
@@ -513,6 +604,20 @@ namespace Control
         void
         step(const IMC::EstimatedState& state, const TrackingState& ts)
         {
+            if (!m_ctrl_params.use_controller)
+                return;
+
+            // If target is simply the TrackingState
+            if (m_ctrl_params.isTargetSimulated) {
+                double tempPt[2] = {ts.track_pos.x, ts.track_pos.y};
+                Matrix tempPtVec(tempPt, 2, 1);
+                m_target_es.Pt = tempPtVec;
+
+                double tempdPt[2] = {ts.track_vel.x, ts.track_vel.y};
+                Matrix tempdPtVec(tempdPt, 2, 1);
+                m_target_es.dPt = tempdPtVec;
+            }
+
             // Update the path variables
             updatePathVariables(&ts);
 
@@ -523,20 +628,17 @@ namespace Control
             computeVehicleState(&state);
 
             // Estimate target velocity
-            if ( m_ctrl_params.compVel )
-                estimateTargetVelocity(&ts);
+//            if ( m_ctrl_params.compVel )
+//                estimateTargetVelocity(&ts);
 
             // Compute the desired reference position
             m_ctrl_var.P_ref = m_target_es.Pt + m_ctrl_var.Pd;
             m_ctrl_var.dP_ref = m_target_es.dPt + m_ctrl_var.grad_Pd*m_ctrl_var.gamma_dot;
 
-            // inf("Reference = (%f, %f)", m_ctrl_var.P_ref(0,0), m_ctrl_var.P_ref(1,0));
-            // inf("Ref. - Target = (%f, %f)", m_ctrl_var.P_ref(0,0) - m_target_es.Pt(0,0), m_ctrl_var.P_ref(1,0) - m_target_es.Pt(1,0));
-            // inf("Desired pos = (%f, %f)", m_ctrl_var.Pd(0,0), m_ctrl_var.Pd(1,0));
-
             if ( getSystemId() != m_target_params.ID ) {
                 inf("Target position = (%f, %f)", m_target_es.Pt(0,0), m_target_es.Pt(1,0));
                 inf("Target velocity = (%f, %f)", m_target_es.dPt(0,0), m_target_es.dPt(1,0));
+                inf("InitialTarget = (%f,%f)", m_target_es.NED.x, m_target_es.NED.y);
             }
 
             // Update errors (world and local coordinates)
@@ -555,16 +657,17 @@ namespace Control
             else
                 eta = 0;
             m_ctrl_var.g_err = -m_ctrl_params.k_eta*m_ctrl_var.gamma_ref*(tanh(eta+m_ctrl_params.dead_zone) + tanh(eta-m_ctrl_params.dead_zone));
-            //m_ctrl_var.g_err = -m_ctrl_params.kdouble norm_gradPd = m_ctrl_var.grad_Pd.norm_2();_eta*eta;
 
             // Compute the robustness term
             double den;
             double norm_MPF_error = m_ctrl_var.MPF_error.norm_2();
-            if ( norm_MPF_error >= m_ctrl_params.MPF_robust_threshold )
+            if ( norm_MPF_error >= m_ctrl_params.epsilon_w )
                 den = norm_MPF_error;
             else
-                den = m_ctrl_params.MPF_robust_threshold;
-            m_ctrl_var.robust = m_ctrl_params.rho*( m_ctrl_var.MPF_error/den );
+                den = m_ctrl_params.epsilon_w;
+            m_ctrl_var.robust = (m_ctrl_params.rho/den)*m_ctrl_var.MPF_error;
+
+            inf("Robustness term = (%f,%f)", m_ctrl_var.robust(0,0), m_ctrl_var.robust(1,0));
 
             // Path Following controller 1: without saturation in control law
             m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.MPF_error + transpose(m_state.Rv)*m_ctrl_var.dP_ref - m_ctrl_var.robust);
@@ -573,28 +676,70 @@ namespace Control
             //m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.SatMPF_error + transpose(m_state.Rv)*m_ctrl_var.dP_ref);
 
             // Dispatch control commands
-
-            // With saturation
             m_speed_cmd.value = sat(m_ctrl_var.cmd(0,0), m_ctrl_params.min_speed, m_ctrl_params.max_speed);
             m_hrate_cmd.value = sat(m_ctrl_var.cmd(1,0), m_ctrl_params.min_omega, m_ctrl_params.max_omega);
 
-            // Without saturation
-            //m_speed_cmd.value = m_ctrl_var.cmd(0,0);
-            //m_hrate_cmd.value = m_ctrl_var.cmd(1,0);
-
-//            if(m_ctrl_params.faulty && (m_ctrl_var.gamma > 50) && (m_ctrl_var.gamma < 100))
-//            {
-//                m_speed_cmd.value = m_ctrl_params.faulty_speed;
-//                war("Faulty speed.");
-//                inf("Vehicle longidudinal velocity is %f", m_ctrl_var.gamma);
-//            }
-
-            //dispatch(m_speed_cmd,Tasks::DF_LOOP_BACK);
-            dispatch(m_speed_cmd);
+            dispatch(m_speed_cmd,Tasks::DF_LOOP_BACK);
             dispatch(m_hrate_cmd);
 
-            // Logs
+            // Logging
             inf("Control command = (%f, %f)", m_speed_cmd.value, m_hrate_cmd.value);
+
+            // Control commands
+            MPFVar.ctrl_cmd_v = m_ctrl_var.cmd(0,0);
+            MPFVar.ctrl_cmd_omega = m_ctrl_var.cmd(1,0);
+            MPFVar.sat_ctrl_cmd_v = m_speed_cmd.value;
+            MPFVar.sat_ctrl_cmd_omega = m_hrate_cmd.value;
+            MPFVar.robust_v = m_ctrl_var.robust(0,0);
+            MPFVar.robust_omega = m_ctrl_var.robust(1,0);
+
+            // Path variables
+            MPFVar.gamma = m_ctrl_var.gamma;
+            MPFVar.gamma_dot =   m_ctrl_var.gamma_dot;
+            MPFVar.g_err = m_ctrl_var.g_err;
+
+            // Target state
+            MPFVar.target_x = m_target_es.Pt(0,0);
+            MPFVar.target_y = m_target_es.Pt(1,0);
+            MPFVar.target_z = m_target_state.z;
+            MPFVar.target_vx = m_target_es.dPt(0,0);
+            MPFVar.target_vy = m_target_es.dPt(1,0);
+            MPFVar.target_vz = m_target_state.vz;
+
+            // Vehicle state
+            MPFVar.x = m_state.Pv(0,0);
+            MPFVar.y = m_state.Pv(1,0);
+            MPFVar.z = state.z;
+            MPFVar.vx = m_state.dPv(0,0);
+            MPFVar.vy = m_state.dPv(1,0);
+            MPFVar.vz = state.vz;
+
+            // References
+            MPFVar.pd_x = m_ctrl_var.Pd(0,0);
+            MPFVar.pd_y = m_ctrl_var.Pd(1,0);
+            MPFVar.p_ref_x = m_ctrl_var.P_ref(0,0);
+            MPFVar.p_ref_y = m_ctrl_var.P_ref(1,0);
+
+            // Errors
+            MPFVar.norm_mpf_err = norm_MPF_error;
+            MPFVar.mpf_err_x = m_ctrl_var.MPF_error(0,0);
+            MPFVar.mpf_err_y = m_ctrl_var.MPF_error(1,0);
+            MPFVar.mpf_err_z = 0.0;
+            MPFVar.err_x = m_ctrl_var.World_error(0,0);
+            MPFVar.err_y = m_ctrl_var.World_error(1,0);
+            MPFVar.err_z = 0.0;
+
+            // TrackingState data
+            MPFVar.start_x = ts.start.x;
+            MPFVar.start_y = ts.start.y;
+            MPFVar.start_z = ts.start.z;
+            MPFVar.end_x = ts.end.x;
+            MPFVar.end_y = ts.end.y;
+            MPFVar.end_z = ts.end.z;
+            //MPFVar.duration = Time::Clock::getSinceEpoch();
+
+            // Dispatch log data
+            dispatch(MPFVar);
         }
 
         void
@@ -671,15 +816,6 @@ namespace Control
 
 //            // Update the distance to the end
 //            m_target_es.distanceTillEnd = Math::norm(m_target_es.Pt(0,0) - ts->end.x, m_target_es.Pt(1,0) - ts->end.y);
-//        }
-
-//        //! Converts strings into upper case
-//        static void toUpper(std::basic_string<char>& s)
-//        {
-//           for (std::basic_string<char>::iterator p = s.begin();
-//                p != s.end(); ++p) {
-//              *p = toupper(*p); // toupper is for char
-//           }
 //        }
 
       };

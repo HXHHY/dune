@@ -203,6 +203,10 @@ namespace Control
             {
                 m_target_state.x = state.x;
                 m_target_state.y = state.y;
+
+                m_target_state.lat = state.lat;
+                m_target_state.lon = state.lon;
+
                 dispatch(m_target_state);
             }
 
@@ -250,18 +254,19 @@ namespace Control
         {
             //inf("Consuming a TargetState message.");
 
-            if (target_state->getSource() == m_control_params.target_ID)
+            if (target_state->getSource() == m_control_params.target_ID &&
+                    getSystemId() != m_control_params.target_ID)
             {
                 double x_target;
                 double y_target;
 
                 // Compute the NED coordinates of the target
-//                WGS84::displacement(m_control_state.lat, m_control_state.lon, 0,
-//                                    target_state->lat, target_state->lon, 0,
-//                                    &x_target, &y_target);
+                WGS84::displacement(m_control_state.lat, m_control_state.lon, 0,
+                                    target_state->lat, target_state->lon, 0,
+                                    &x_target, &y_target);
 
-                x_target = target_state->x;
-                y_target = target_state->y;
+//                x_target = target_state->x;
+//                y_target = target_state->y;
 
                 inf("Target coordinates are = (%f, %f)", x_target, y_target);
                 m_control_ref.x = x_target;

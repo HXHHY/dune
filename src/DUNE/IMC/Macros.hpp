@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 10dd33b2beb0db6eacc07ab3cc5d66c5                            *
+// IMC XML MD5: 69c3cb090afe3a9831f7621d6b723ff3                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -654,6 +654,8 @@
 #define DUNE_IMC_DMSDETECTION 908
 //! TargetState identification number.
 #define DUNE_IMC_TARGETSTATE 909
+//! MPFVariables identification number.
+#define DUNE_IMC_MPFVARIABLES 910
 //! TotalMagIntensity identification number.
 #define DUNE_IMC_TOTALMAGINTENSITY 2006
 

@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 10dd33b2beb0db6eacc07ab3cc5d66c5                            *
+// IMC XML MD5: 69c3cb090afe3a9831f7621d6b723ff3                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -26480,8 +26480,10 @@ namespace DUNE
       lon = 0;
       x = 0;
       y = 0;
+      z = 0;
       vx = 0;
       vy = 0;
+      vz = 0;
       depth = 0;
       speed = 0;
       psi = 0;
@@ -26495,8 +26497,10 @@ namespace DUNE
       if (lon != other__.lon) return false;
       if (x != other__.x) return false;
       if (y != other__.y) return false;
+      if (z != other__.z) return false;
       if (vx != other__.vx) return false;
       if (vy != other__.vy) return false;
+      if (vz != other__.vz) return false;
       if (depth != other__.depth) return false;
       if (speed != other__.speed) return false;
       if (psi != other__.psi) return false;
@@ -26519,8 +26523,10 @@ namespace DUNE
       ptr__ += IMC::serialize(lon, ptr__);
       ptr__ += IMC::serialize(x, ptr__);
       ptr__ += IMC::serialize(y, ptr__);
+      ptr__ += IMC::serialize(z, ptr__);
       ptr__ += IMC::serialize(vx, ptr__);
       ptr__ += IMC::serialize(vy, ptr__);
+      ptr__ += IMC::serialize(vz, ptr__);
       ptr__ += IMC::serialize(depth, ptr__);
       ptr__ += IMC::serialize(speed, ptr__);
       ptr__ += IMC::serialize(psi, ptr__);
@@ -26535,8 +26541,10 @@ namespace DUNE
       bfr__ += IMC::deserialize(lon, bfr__, size__);
       bfr__ += IMC::deserialize(x, bfr__, size__);
       bfr__ += IMC::deserialize(y, bfr__, size__);
+      bfr__ += IMC::deserialize(z, bfr__, size__);
       bfr__ += IMC::deserialize(vx, bfr__, size__);
       bfr__ += IMC::deserialize(vy, bfr__, size__);
+      bfr__ += IMC::deserialize(vz, bfr__, size__);
       bfr__ += IMC::deserialize(depth, bfr__, size__);
       bfr__ += IMC::deserialize(speed, bfr__, size__);
       bfr__ += IMC::deserialize(psi, bfr__, size__);
@@ -26551,8 +26559,10 @@ namespace DUNE
       bfr__ += IMC::reverseDeserialize(lon, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(x, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(z, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(vx, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(vy, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(vz, bfr__, size__);
       bfr__ += IMC::deserialize(depth, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(speed, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(psi, bfr__, size__);
@@ -26566,11 +26576,291 @@ namespace DUNE
       IMC::toJSON(os__, "lon", lon, nindent__);
       IMC::toJSON(os__, "x", x, nindent__);
       IMC::toJSON(os__, "y", y, nindent__);
+      IMC::toJSON(os__, "z", z, nindent__);
       IMC::toJSON(os__, "vx", vx, nindent__);
       IMC::toJSON(os__, "vy", vy, nindent__);
+      IMC::toJSON(os__, "vz", vz, nindent__);
       IMC::toJSON(os__, "depth", depth, nindent__);
       IMC::toJSON(os__, "speed", speed, nindent__);
       IMC::toJSON(os__, "psi", psi, nindent__);
+    }
+
+    MPFVariables::MPFVariables(void)
+    {
+      m_header.mgid = 910;
+      clear();
+    }
+
+    void
+    MPFVariables::clear(void)
+    {
+      ctrl_cmd_v = 0;
+      ctrl_cmd_omega = 0;
+      sat_ctrl_cmd_v = 0;
+      sat_ctrl_cmd_omega = 0;
+      robust_v = 0;
+      robust_omega = 0;
+      gamma = 0;
+      gamma_dot = 0;
+      g_err = 0;
+      target_x = 0;
+      target_y = 0;
+      target_z = 0;
+      target_vx = 0;
+      target_vy = 0;
+      target_vz = 0;
+      x = 0;
+      y = 0;
+      z = 0;
+      vx = 0;
+      vy = 0;
+      vz = 0;
+      pd_x = 0;
+      pd_y = 0;
+      p_ref_x = 0;
+      p_ref_y = 0;
+      norm_mpf_err = 0;
+      mpf_err_x = 0;
+      mpf_err_y = 0;
+      mpf_err_z = 0;
+      err_x = 0;
+      err_y = 0;
+      err_z = 0;
+      start_x = 0;
+      start_y = 0;
+      start_z = 0;
+      end_x = 0;
+      end_y = 0;
+      end_z = 0;
+    }
+
+    bool
+    MPFVariables::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::MPFVariables& other__ = static_cast<const MPFVariables&>(msg__);
+      if (ctrl_cmd_v != other__.ctrl_cmd_v) return false;
+      if (ctrl_cmd_omega != other__.ctrl_cmd_omega) return false;
+      if (sat_ctrl_cmd_v != other__.sat_ctrl_cmd_v) return false;
+      if (sat_ctrl_cmd_omega != other__.sat_ctrl_cmd_omega) return false;
+      if (robust_v != other__.robust_v) return false;
+      if (robust_omega != other__.robust_omega) return false;
+      if (gamma != other__.gamma) return false;
+      if (gamma_dot != other__.gamma_dot) return false;
+      if (g_err != other__.g_err) return false;
+      if (target_x != other__.target_x) return false;
+      if (target_y != other__.target_y) return false;
+      if (target_z != other__.target_z) return false;
+      if (target_vx != other__.target_vx) return false;
+      if (target_vy != other__.target_vy) return false;
+      if (target_vz != other__.target_vz) return false;
+      if (x != other__.x) return false;
+      if (y != other__.y) return false;
+      if (z != other__.z) return false;
+      if (vx != other__.vx) return false;
+      if (vy != other__.vy) return false;
+      if (vz != other__.vz) return false;
+      if (pd_x != other__.pd_x) return false;
+      if (pd_y != other__.pd_y) return false;
+      if (p_ref_x != other__.p_ref_x) return false;
+      if (p_ref_y != other__.p_ref_y) return false;
+      if (norm_mpf_err != other__.norm_mpf_err) return false;
+      if (mpf_err_x != other__.mpf_err_x) return false;
+      if (mpf_err_y != other__.mpf_err_y) return false;
+      if (mpf_err_z != other__.mpf_err_z) return false;
+      if (err_x != other__.err_x) return false;
+      if (err_y != other__.err_y) return false;
+      if (err_z != other__.err_z) return false;
+      if (start_x != other__.start_x) return false;
+      if (start_y != other__.start_y) return false;
+      if (start_z != other__.start_z) return false;
+      if (end_x != other__.end_x) return false;
+      if (end_y != other__.end_y) return false;
+      if (end_z != other__.end_z) return false;
+      return true;
+    }
+
+    int
+    MPFVariables::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    MPFVariables::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(ctrl_cmd_v, ptr__);
+      ptr__ += IMC::serialize(ctrl_cmd_omega, ptr__);
+      ptr__ += IMC::serialize(sat_ctrl_cmd_v, ptr__);
+      ptr__ += IMC::serialize(sat_ctrl_cmd_omega, ptr__);
+      ptr__ += IMC::serialize(robust_v, ptr__);
+      ptr__ += IMC::serialize(robust_omega, ptr__);
+      ptr__ += IMC::serialize(gamma, ptr__);
+      ptr__ += IMC::serialize(gamma_dot, ptr__);
+      ptr__ += IMC::serialize(g_err, ptr__);
+      ptr__ += IMC::serialize(target_x, ptr__);
+      ptr__ += IMC::serialize(target_y, ptr__);
+      ptr__ += IMC::serialize(target_z, ptr__);
+      ptr__ += IMC::serialize(target_vx, ptr__);
+      ptr__ += IMC::serialize(target_vy, ptr__);
+      ptr__ += IMC::serialize(target_vz, ptr__);
+      ptr__ += IMC::serialize(x, ptr__);
+      ptr__ += IMC::serialize(y, ptr__);
+      ptr__ += IMC::serialize(z, ptr__);
+      ptr__ += IMC::serialize(vx, ptr__);
+      ptr__ += IMC::serialize(vy, ptr__);
+      ptr__ += IMC::serialize(vz, ptr__);
+      ptr__ += IMC::serialize(pd_x, ptr__);
+      ptr__ += IMC::serialize(pd_y, ptr__);
+      ptr__ += IMC::serialize(p_ref_x, ptr__);
+      ptr__ += IMC::serialize(p_ref_y, ptr__);
+      ptr__ += IMC::serialize(norm_mpf_err, ptr__);
+      ptr__ += IMC::serialize(mpf_err_x, ptr__);
+      ptr__ += IMC::serialize(mpf_err_y, ptr__);
+      ptr__ += IMC::serialize(mpf_err_z, ptr__);
+      ptr__ += IMC::serialize(err_x, ptr__);
+      ptr__ += IMC::serialize(err_y, ptr__);
+      ptr__ += IMC::serialize(err_z, ptr__);
+      ptr__ += IMC::serialize(start_x, ptr__);
+      ptr__ += IMC::serialize(start_y, ptr__);
+      ptr__ += IMC::serialize(start_z, ptr__);
+      ptr__ += IMC::serialize(end_x, ptr__);
+      ptr__ += IMC::serialize(end_y, ptr__);
+      ptr__ += IMC::serialize(end_z, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    MPFVariables::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(ctrl_cmd_v, bfr__, size__);
+      bfr__ += IMC::deserialize(ctrl_cmd_omega, bfr__, size__);
+      bfr__ += IMC::deserialize(sat_ctrl_cmd_v, bfr__, size__);
+      bfr__ += IMC::deserialize(sat_ctrl_cmd_omega, bfr__, size__);
+      bfr__ += IMC::deserialize(robust_v, bfr__, size__);
+      bfr__ += IMC::deserialize(robust_omega, bfr__, size__);
+      bfr__ += IMC::deserialize(gamma, bfr__, size__);
+      bfr__ += IMC::deserialize(gamma_dot, bfr__, size__);
+      bfr__ += IMC::deserialize(g_err, bfr__, size__);
+      bfr__ += IMC::deserialize(target_x, bfr__, size__);
+      bfr__ += IMC::deserialize(target_y, bfr__, size__);
+      bfr__ += IMC::deserialize(target_z, bfr__, size__);
+      bfr__ += IMC::deserialize(target_vx, bfr__, size__);
+      bfr__ += IMC::deserialize(target_vy, bfr__, size__);
+      bfr__ += IMC::deserialize(target_vz, bfr__, size__);
+      bfr__ += IMC::deserialize(x, bfr__, size__);
+      bfr__ += IMC::deserialize(y, bfr__, size__);
+      bfr__ += IMC::deserialize(z, bfr__, size__);
+      bfr__ += IMC::deserialize(vx, bfr__, size__);
+      bfr__ += IMC::deserialize(vy, bfr__, size__);
+      bfr__ += IMC::deserialize(vz, bfr__, size__);
+      bfr__ += IMC::deserialize(pd_x, bfr__, size__);
+      bfr__ += IMC::deserialize(pd_y, bfr__, size__);
+      bfr__ += IMC::deserialize(p_ref_x, bfr__, size__);
+      bfr__ += IMC::deserialize(p_ref_y, bfr__, size__);
+      bfr__ += IMC::deserialize(norm_mpf_err, bfr__, size__);
+      bfr__ += IMC::deserialize(mpf_err_x, bfr__, size__);
+      bfr__ += IMC::deserialize(mpf_err_y, bfr__, size__);
+      bfr__ += IMC::deserialize(mpf_err_z, bfr__, size__);
+      bfr__ += IMC::deserialize(err_x, bfr__, size__);
+      bfr__ += IMC::deserialize(err_y, bfr__, size__);
+      bfr__ += IMC::deserialize(err_z, bfr__, size__);
+      bfr__ += IMC::deserialize(start_x, bfr__, size__);
+      bfr__ += IMC::deserialize(start_y, bfr__, size__);
+      bfr__ += IMC::deserialize(start_z, bfr__, size__);
+      bfr__ += IMC::deserialize(end_x, bfr__, size__);
+      bfr__ += IMC::deserialize(end_y, bfr__, size__);
+      bfr__ += IMC::deserialize(end_z, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    MPFVariables::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(ctrl_cmd_v, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(ctrl_cmd_omega, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(sat_ctrl_cmd_v, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(sat_ctrl_cmd_omega, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(robust_v, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(robust_omega, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(gamma, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(gamma_dot, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(g_err, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(target_x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(target_y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(target_z, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(target_vx, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(target_vy, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(target_vz, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(z, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(vx, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(vy, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(vz, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(pd_x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(pd_y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(p_ref_x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(p_ref_y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(norm_mpf_err, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(mpf_err_x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(mpf_err_y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(mpf_err_z, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(err_x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(err_y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(err_z, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(start_x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(start_y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(start_z, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(end_x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(end_y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(end_z, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    MPFVariables::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "ctrl_cmd_v", ctrl_cmd_v, nindent__);
+      IMC::toJSON(os__, "ctrl_cmd_omega", ctrl_cmd_omega, nindent__);
+      IMC::toJSON(os__, "sat_ctrl_cmd_v", sat_ctrl_cmd_v, nindent__);
+      IMC::toJSON(os__, "sat_ctrl_cmd_omega", sat_ctrl_cmd_omega, nindent__);
+      IMC::toJSON(os__, "robust_v", robust_v, nindent__);
+      IMC::toJSON(os__, "robust_omega", robust_omega, nindent__);
+      IMC::toJSON(os__, "gamma", gamma, nindent__);
+      IMC::toJSON(os__, "gamma_dot", gamma_dot, nindent__);
+      IMC::toJSON(os__, "g_err", g_err, nindent__);
+      IMC::toJSON(os__, "target_x", target_x, nindent__);
+      IMC::toJSON(os__, "target_y", target_y, nindent__);
+      IMC::toJSON(os__, "target_z", target_z, nindent__);
+      IMC::toJSON(os__, "target_vx", target_vx, nindent__);
+      IMC::toJSON(os__, "target_vy", target_vy, nindent__);
+      IMC::toJSON(os__, "target_vz", target_vz, nindent__);
+      IMC::toJSON(os__, "x", x, nindent__);
+      IMC::toJSON(os__, "y", y, nindent__);
+      IMC::toJSON(os__, "z", z, nindent__);
+      IMC::toJSON(os__, "vx", vx, nindent__);
+      IMC::toJSON(os__, "vy", vy, nindent__);
+      IMC::toJSON(os__, "vz", vz, nindent__);
+      IMC::toJSON(os__, "pd_x", pd_x, nindent__);
+      IMC::toJSON(os__, "pd_y", pd_y, nindent__);
+      IMC::toJSON(os__, "p_ref_x", p_ref_x, nindent__);
+      IMC::toJSON(os__, "p_ref_y", p_ref_y, nindent__);
+      IMC::toJSON(os__, "norm_mpf_err", norm_mpf_err, nindent__);
+      IMC::toJSON(os__, "mpf_err_x", mpf_err_x, nindent__);
+      IMC::toJSON(os__, "mpf_err_y", mpf_err_y, nindent__);
+      IMC::toJSON(os__, "mpf_err_z", mpf_err_z, nindent__);
+      IMC::toJSON(os__, "err_x", err_x, nindent__);
+      IMC::toJSON(os__, "err_y", err_y, nindent__);
+      IMC::toJSON(os__, "err_z", err_z, nindent__);
+      IMC::toJSON(os__, "start_x", start_x, nindent__);
+      IMC::toJSON(os__, "start_y", start_y, nindent__);
+      IMC::toJSON(os__, "start_z", start_z, nindent__);
+      IMC::toJSON(os__, "end_x", end_x, nindent__);
+      IMC::toJSON(os__, "end_y", end_y, nindent__);
+      IMC::toJSON(os__, "end_z", end_z, nindent__);
     }
 
     TotalMagIntensity::TotalMagIntensity(void)

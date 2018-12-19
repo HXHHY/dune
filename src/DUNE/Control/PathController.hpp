@@ -303,7 +303,7 @@ namespace DUNE
       void
       onMain(void);
 
-    protected:
+    private:
       //! Update entity state
       //! @param[in] msg message text for error description
       void
