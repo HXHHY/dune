@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 69c3cb090afe3a9831f7621d6b723ff3                            *
+// IMC XML MD5: 9799a7206dbfb1f79b5f5a55d65d960d                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -25130,6 +25130,8 @@ namespace DUNE
       fp32_t end_y;
       //! Tracking state end z.
       fp32_t end_z;
+      //! Is controller stuck.
+      uint8_t stuck;
 
       static uint16_t
       getIdStatic(void)
@@ -25178,7 +25180,7 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 152;
+        return 153;
       }
 
       void

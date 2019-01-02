@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 69c3cb090afe3a9831f7621d6b723ff3                            *
+// IMC XML MD5: 9799a7206dbfb1f79b5f5a55d65d960d                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -26632,6 +26632,7 @@ namespace DUNE
       end_x = 0;
       end_y = 0;
       end_z = 0;
+      stuck = 0;
     }
 
     bool
@@ -26676,6 +26677,7 @@ namespace DUNE
       if (end_x != other__.end_x) return false;
       if (end_y != other__.end_y) return false;
       if (end_z != other__.end_z) return false;
+      if (stuck != other__.stuck) return false;
       return true;
     }
 
@@ -26727,6 +26729,7 @@ namespace DUNE
       ptr__ += IMC::serialize(end_x, ptr__);
       ptr__ += IMC::serialize(end_y, ptr__);
       ptr__ += IMC::serialize(end_z, ptr__);
+      ptr__ += IMC::serialize(stuck, ptr__);
       return ptr__;
     }
 
@@ -26772,6 +26775,7 @@ namespace DUNE
       bfr__ += IMC::deserialize(end_x, bfr__, size__);
       bfr__ += IMC::deserialize(end_y, bfr__, size__);
       bfr__ += IMC::deserialize(end_z, bfr__, size__);
+      bfr__ += IMC::deserialize(stuck, bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -26817,6 +26821,7 @@ namespace DUNE
       bfr__ += IMC::reverseDeserialize(end_x, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(end_y, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(end_z, bfr__, size__);
+      bfr__ += IMC::deserialize(stuck, bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -26861,6 +26866,7 @@ namespace DUNE
       IMC::toJSON(os__, "end_x", end_x, nindent__);
       IMC::toJSON(os__, "end_y", end_y, nindent__);
       IMC::toJSON(os__, "end_z", end_z, nindent__);
+      IMC::toJSON(os__, "stuck", stuck, nindent__);
     }
 
     TotalMagIntensity::TotalMagIntensity(void)
