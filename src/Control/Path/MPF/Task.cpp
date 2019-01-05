@@ -48,6 +48,8 @@ namespace Control
           IMC::MPFVariables MPFVar;
 //           IMC::DesiredZ m_depth_cmd;                  // Desired depth
 
+          bool use_controller;
+
           struct Coord {
               fp64_t x;
               fp64_t y;
@@ -189,7 +191,7 @@ namespace Control
                       .description("Desired speed of the vehicle around the path, in m/s");
 
               param("Maximum Speed", m_ctrl_params.max_speed)
-                      .defaultValue("2.1")
+                      .defaultValue("2.0")
                       .description("Maximum speed command to send to AutoPilot.");
 
               param("Minimum Speed", m_ctrl_params.min_speed)
@@ -235,6 +237,12 @@ namespace Control
               param("Is it following?", m_ctrl_params.isFollowing)
                       .defaultValue("false")
                       .description("True if the target is another vehicle.");
+
+              param("Use MPF controller?", use_controller)
+                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
+                      .defaultValue("true")
+                      .description("Use MPF as path controller.");
 
               param("Target Name", m_target_params.name)
                       .defaultValue("lauv-noptilus-1")
@@ -456,6 +464,9 @@ namespace Control
         void
         onPathActivation(void)
         {
+            if (!use_controller)
+                return;
+
             // Activate controllers.
             enableControlLoops(IMC::CL_SPEED | IMC::CL_YAW_RATE);
             //enableControlLoops(IMC::CL_SPEED | IMC::CL_YAW_RATE | IMC::CL_DEPTH);
@@ -616,6 +627,9 @@ namespace Control
         void
         step(const IMC::EstimatedState& state, const TrackingState& ts)
         {
+            if (!use_controller)
+                return;
+
             // If target is simply the TrackingState
             if (m_ctrl_params.isTargetSimulated)
                 computeSimTarget(&ts);

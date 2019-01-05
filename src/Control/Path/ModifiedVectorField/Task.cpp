@@ -48,7 +48,7 @@ namespace Control
   namespace Path
   {
     namespace ModifiedVectorField
-    {
+    { 
       struct Arguments
       {
         double corridor;
@@ -69,6 +69,7 @@ namespace Control
         IMC::TargetState m_target_state;
         //! Task arguments.
         Arguments m_args;
+        std::string useMPF;
 
         Task(const std::string& name, Tasks::Context& ctx):
           DUNE::Control::PathController(name, ctx)
@@ -109,6 +110,9 @@ namespace Control
         {
           PathController::onUpdateParameters();
 
+          m_ctx.config.get("MPF", "Use MPF controller?", "true", useMPF);
+          inf("%s", useMPF.c_str());
+
           if (paramChanged(m_args.entry_angle))
             m_args.entry_angle = Angles::radians(m_args.entry_angle);
 
@@ -124,6 +128,12 @@ namespace Control
         void
         onPathActivation(void)
         {
+          inf("%s", useMPF.c_str());
+          bool temp;
+          castLexical(useMPF, temp);
+          if ( temp )
+              return;
+
           // Activate heading cotroller.
           enableControlLoops(IMC::CL_YAW);
         }
@@ -133,6 +143,16 @@ namespace Control
         void
         step(const IMC::EstimatedState& state, const TrackingState& ts)
         {
+          inf("%s", useMPF.c_str());
+          bool temp;
+          castLexical(useMPF, temp);
+          if ( temp ){
+              inf("Executing MPF Controller");
+              return;
+          }
+          else
+              inf("Executing Mod VectorField Controller");
+
           // Note:
           // cross-track position (lateral error) = ts.track_pos.y
           // and along-track position = ts.track_pos.x
