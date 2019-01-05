@@ -29,7 +29,6 @@
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
-#include <boost/algorithm/string.hpp>
 
 namespace Control
 {
@@ -317,6 +316,9 @@ namespace Control
         void
         onUpdateParameters(void)
         {
+            if (!use_controller)
+                return;
+
             // parameters were set
             PathController::onUpdateParameters();
 
@@ -409,6 +411,9 @@ namespace Control
         void
         onPathStartup(const IMC::EstimatedState& state, const TrackingState& ts)
         {
+            if (!use_controller)
+                return;
+
             inf("Path startup!");
             //inf("Chosen path is ", m_ctrl_params.path_type);
             onUpdateParameters();

@@ -110,9 +110,6 @@ namespace Control
         {
           PathController::onUpdateParameters();
 
-          m_ctx.config.get("MPF", "Use MPF controller?", "true", useMPF);
-          inf("%s", useMPF.c_str());
-
           if (paramChanged(m_args.entry_angle))
             m_args.entry_angle = Angles::radians(m_args.entry_angle);
 
@@ -128,9 +125,8 @@ namespace Control
         void
         onPathActivation(void)
         {
-          inf("%s", useMPF.c_str());
-          bool temp;
-          castLexical(useMPF, temp);
+          m_ctx.config.get("Control.Path.MPF", "Use MPF controller?", "true", useMPF);
+          bool temp; castLexical(useMPF, temp);
           if ( temp )
               return;
 
@@ -143,15 +139,10 @@ namespace Control
         void
         step(const IMC::EstimatedState& state, const TrackingState& ts)
         {
-          inf("%s", useMPF.c_str());
-          bool temp;
-          castLexical(useMPF, temp);
-          if ( temp ){
-              inf("Executing MPF Controller");
+          m_ctx.config.get("Control.Path.MPF", "Use MPF controller?", "true", useMPF);
+          bool temp; castLexical(useMPF, temp);
+          if (temp)
               return;
-          }
-          else
-              inf("Executing Mod VectorField Controller");
 
           // Note:
           // cross-track position (lateral error) = ts.track_pos.y
