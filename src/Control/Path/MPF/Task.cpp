@@ -52,6 +52,9 @@ namespace Control
           struct Coord {
               fp64_t x;
               fp64_t y;
+              fp64_t psi;
+              fp64_t vx;
+              fp64_t vy;
           };
 
           struct ControlParams {
@@ -127,6 +130,7 @@ namespace Control
 
           struct TargetState {
               Coord start, end;             // Start and end points
+              Coord target_state;           // Coordinates of the target state
               Coord NED;                    // NED coordinates of the target (North and West)
 
               Matrix Pt;                    // Target inertial position
@@ -697,16 +701,16 @@ namespace Control
             m_hrate_cmd.value = sat(m_ctrl_var.cmd(1,0), m_ctrl_params.min_omega, m_ctrl_params.max_omega);
 
             // Check if the MPF controller is stuck due to its initial position: if so, execute VectorField control
-            VF_params.stuck = isStuck(&ts);
-            if ( VF_params.stuck ) {
-                disableControlLoops(IMC::CL_YAW_RATE);
-                enableControlLoops(IMC::CL_YAW);
-                executeVectorField(state, ts);
-                inf("MPF controller is stuck... executing VectorField controller.");
-            } else {
-                disableControlLoops(IMC::CL_YAW);
-                enableControlLoops(IMC::CL_YAW_RATE);
-            }
+//            VF_params.stuck = isStuck(&ts);
+//            if ( VF_params.stuck ) {
+//                disableControlLoops(IMC::CL_YAW_RATE);
+//                enableControlLoops(IMC::CL_YAW);
+//                executeVectorField(state, ts);
+//                inf("MPF controller is stuck... executing VectorField controller.");
+//            } else {
+//                disableControlLoops(IMC::CL_YAW);
+//                enableControlLoops(IMC::CL_YAW_RATE);
+//            }
 
             dispatch(m_speed_cmd,Tasks::DF_LOOP_BACK);
             dispatch(m_hrate_cmd);
@@ -831,9 +835,9 @@ namespace Control
             }
         }
 
-        //! This calls the vector field method, in case the vehicle is stuck
+        //! This computes the desired heading using the vector field method
         void
-        executeVectorField(const IMC::EstimatedState& state, const TrackingState& ts)
+        executeVectorField(const EstimatedState& state, const TrackingState& ts)
         {
             m_speed_cmd.value = m_ctrl_params.max_speed;
             // Note:
@@ -905,7 +909,6 @@ namespace Control
             Matrix tempPtVec(tempPt, 2, 1);
             m_target_es.Pt = tempPtVec;
         }
-
       };
     }
   }

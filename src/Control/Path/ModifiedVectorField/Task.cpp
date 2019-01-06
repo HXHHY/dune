@@ -126,12 +126,13 @@ namespace Control
         onPathActivation(void)
         {
           m_ctx.config.get("Control.Path.MPF", "Use MPF controller?", "true", useMPF);
-          bool temp; castLexical(useMPF, temp);
-          if ( temp )
+          bool isUsingMPF; castLexical(useMPF, isUsingMPF);
+          if (isUsingMPF && !m_args.isDispatching)
               return;
 
           // Activate heading cotroller.
           enableControlLoops(IMC::CL_YAW);
+          disableControlLoops(IMC::CL_YAW_RATE);
         }
 
         //! Execute a path control step
@@ -140,8 +141,8 @@ namespace Control
         step(const IMC::EstimatedState& state, const TrackingState& ts)
         {
           m_ctx.config.get("Control.Path.MPF", "Use MPF controller?", "true", useMPF);
-          bool temp; castLexical(useMPF, temp);
-          if (temp)
+          bool isUsingMPF; castLexical(useMPF, isUsingMPF);
+          if (isUsingMPF && !m_args.isDispatching)
               return;
 
           // Note:
