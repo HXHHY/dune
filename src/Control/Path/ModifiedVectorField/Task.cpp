@@ -65,6 +65,8 @@ namespace Control
         double m_gain;
         //! Outgoing desired heading message.
         IMC::DesiredHeading m_heading;
+        //! Outgoing desired heading rate message.
+        IMC::DesiredHeadingRate m_heading_rate;
         //! Outgoing desired target state.
         IMC::TargetState m_target_state;
         //! Task arguments.
@@ -130,8 +132,10 @@ namespace Control
           if (isUsingMPF && !m_args.isDispatching)
               return;
 
-          // Activate heading cotroller.
+          // Activate heading cotroller and deactivate the yaw rate controller.
           enableControlLoops(IMC::CL_YAW);
+          m_heading_rate.value = 0.0;
+          dispatch(m_heading_rate);
           disableControlLoops(IMC::CL_YAW_RATE);
         }
 

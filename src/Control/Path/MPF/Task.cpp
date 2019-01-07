@@ -131,7 +131,7 @@ namespace Control
           struct TargetState {
               Coord start, end;             // Start and end points
               Coord target_state;           // Coordinates of the target state
-              Coord NED;                    // NED coordinates of the target (North and West)
+              Coord Pvt0;                   // Initial displacement btw the target and the vehicle
 
               Matrix Pt;                    // Target inertial position
               Matrix dPt;                   // Target inertial velocity
@@ -147,7 +147,7 @@ namespace Control
               Matrix Rv;                // Inertial rotation matrix.
               fp64_t lat;
               fp64_t lon;
-              Coord NED;                // NED coordinates of the vehicle (North and West)
+              //Coord NED;                // NED coordinates of the vehicle (North and West)
           } m_state;
 
           struct VFParams {
@@ -569,9 +569,9 @@ namespace Control
             m_state.dPv = tempdPvVec;
 
             // Compute the initial NED displacement of the vehicle
-            WGS84::displacement(0, 0, 0,
-                                state->lat, state->lon, 0,
-                                &m_state.NED.x, &m_state.NED.y);
+//            WGS84::displacement(0, 0, 0,
+//                                state->lat, state->lon, 0,
+//                                &m_state.NED.x, &m_state.NED.y);
 
             // If vehicle is also the target, dispatch its GPS coordinates (WSG84).
             if ( getSystemId() == m_target_params.ID ) {
@@ -610,14 +610,13 @@ namespace Control
             // Compute target position wrt the follower
             if (target_state->getSource() == m_target_params.ID) {
 
-                // Compute the initial NED displacement of the vehicle
+                // Compute the initial displacement btw target and vehicle
                 WGS84::displacement(target_state->lat, target_state->lon, 0,
                                     m_state.lat, m_state.lon, 0,
-                                    &m_target_es.NED.x, &m_target_es.NED.y);
+                                    &m_target_es.Pvt0.x, &m_target_es.Pvt0.y);
 
-//                double tempPtx = m_target_state.x + (m_target_es.NED.x - m_state.NED.x);
-//                double tempPty = m_target_state.y + (m_target_es.NED.y - m_state.NED.y);
-                double tempPt[2] = {target_state->x, target_state->y};
+                // double tempPt[2] = {target_state->x, target_state->y};
+                double tempPt[2] = {target_state->x + m_target_es.Pvt0.x, target_state->y + m_target_es.Pvt0.y};
                 Matrix tempPtVec(tempPt, 2, 1);
                 m_target_es.Pt = tempPtVec;
 
@@ -626,8 +625,8 @@ namespace Control
                     Matrix tempdPtVec(tempdPt, 2, 1);
                     m_target_es.dPt = tempdPtVec;
                 }
-//                inf("Delta0 = (%f,%f)", m_target_es.NED.x - m_state.NED.x, m_target_es.NED.y - m_state.NED.y);
-//                inf("InitialState = (%f,%f)", m_state.NED.x, m_state.NED.y);
+
+                inf("Initial displacement = (%f,%f)", m_target_es.Pvt0.x, m_target_es.Pvt0.y);
             }
         }
 
@@ -640,8 +639,8 @@ namespace Control
                 return;
 
             // If target is simply the TrackingState
-            if (m_ctrl_params.isTargetSimulated)
-                computeSimTarget(&ts);
+//            if (m_ctrl_params.isTargetSimulated)
+//                computeSimTarget(&ts);
 
             // Update the path variables
             updatePathVariables(&ts);
@@ -886,29 +885,29 @@ namespace Control
         }
 
         //! Simulates the target as a linear dynamic system.
-        void
-        computeSimTarget(const TrackingState* ts)
-        {
-            //m_target_es.start = ts->start;
-            //m_target_es.end = ts->end;
+//        void
+//        computeSimTarget(const TrackingState* ts)
+//        {
+//            //m_target_es.start = ts->start;
+//            //m_target_es.end = ts->end;
 
-            // Compute error
-            double tempdErr[2] = {ts->end.x - m_target_es.Pt(0,0), ts->end.y - m_target_es.Pt(1,0)};
-            Matrix tempdErrVec(tempdErr, 2, 1);
-            m_target_es.Err = tempdErrVec;
+//            // Compute error
+//            double tempdErr[2] = {ts->end.x - m_target_es.Pt(0,0), ts->end.y - m_target_es.Pt(1,0)};
+//            Matrix tempdErrVec(tempdErr, 2, 1);
+//            m_target_es.Err = tempdErrVec;
 
-            // Bound simulated target velocities to maximum absolute speed
-            m_target_es.dPt = m_target_params.Kt*m_target_es.Err;
-            if (m_target_es.dPt.norm_2() > m_target_params.max_abs_speed){
-                m_target_es.dPt = m_target_params.max_abs_speed*m_target_es.dPt/m_target_es.dPt.norm_2();
-            }
+//            // Bound simulated target velocities to maximum absolute speed
+//            m_target_es.dPt = m_target_params.Kt*m_target_es.Err;
+//            if (m_target_es.dPt.norm_2() > m_target_params.max_abs_speed){
+//                m_target_es.dPt = m_target_params.max_abs_speed*m_target_es.dPt/m_target_es.dPt.norm_2();
+//            }
 
-            // Update simulated target position
-            inf("Sample time = %f", ts->delta);
-            double tempPt[2] = {m_target_es.Pt(0,0) + ts->delta*m_target_es.dPt(0,0), m_target_es.Pt(1,0) + ts->delta*m_target_es.dPt(1,0)};
-            Matrix tempPtVec(tempPt, 2, 1);
-            m_target_es.Pt = tempPtVec;
-        }
+//            // Update simulated target position
+//            inf("Sample time = %f", ts->delta);
+//            double tempPt[2] = {m_target_es.Pt(0,0) + ts->delta*m_target_es.dPt(0,0), m_target_es.Pt(1,0) + ts->delta*m_target_es.dPt(1,0)};
+//            Matrix tempPtVec(tempPt, 2, 1);
+//            m_target_es.Pt = tempPtVec;
+//        }
       };
     }
   }
