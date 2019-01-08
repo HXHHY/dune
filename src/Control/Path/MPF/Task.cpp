@@ -615,8 +615,8 @@ namespace Control
                                     m_state.lat, m_state.lon, 0,
                                     &m_target_es.Pvt0.x, &m_target_es.Pvt0.y);
 
-                // double tempPt[2] = {target_state->x, target_state->y};
-                double tempPt[2] = {target_state->x + m_target_es.Pvt0.x, target_state->y + m_target_es.Pvt0.y};
+                double tempPt[2] = {target_state->x, target_state->y};
+                //double tempPt[2] = {target_state->x + m_target_es.Pvt0.x, target_state->y + m_target_es.Pvt0.y};
                 Matrix tempPtVec(tempPt, 2, 1);
                 m_target_es.Pt = tempPtVec;
 
@@ -626,7 +626,7 @@ namespace Control
                     m_target_es.dPt = tempdPtVec;
                 }
 
-                inf("Initial displacement = (%f,%f)", m_target_es.Pvt0.x, m_target_es.Pvt0.y);
+                //inf("Initial displacement = (%f,%f)", m_target_es.Pvt0.x, m_target_es.Pvt0.y);
             }
         }
 
