@@ -45,8 +45,8 @@ namespace Control
           IMC::DesiredHeadingRate m_heading_cmd;         // Desired heading for the Vector Field controller
           IMC::TargetState m_target_state;               // Target state
           IMC::MPFVariables MPFVar;                      // Important variables to be recorded
-//          IMC::DesiredPath dpath;                        // Desired path message to be sent to Neptus
-//          IMC::DesiredZ m_depth_cmd;                  // Desired depth
+          IMC::DesiredPath dpath;                        // Desired path message to be sent to Neptus
+//          IMC::DesiredZ m_depth_cmd;                     // Desired depth
 
           bool isUsingMPF;
 
@@ -110,7 +110,7 @@ namespace Control
               double lampl;         // Amplitude of the lemniscate path
               double lomega;        // Frequency of the lemniscate path
 
-              bool make8;           // True if lemnscate main axis is the y-direction (Inf form); False otherwise (8 form)
+              bool make8;           // True if lemniscate main axis is the y-direction (Inf form); False otherwise (8 form)
           } m_path_params;
 
           struct TargetParams {
@@ -407,8 +407,6 @@ namespace Control
             // Activate controllers.
             disableControlLoops(IMC::CL_YAW);
             enableControlLoops(IMC::CL_SPEED | IMC::CL_YAW_RATE);
-//            m_speed_cmd.value = 0.0;
-//            dispatch(m_speed_cmd);
 
             inf("Executing MPF-epsilon controller.");
         }
@@ -580,11 +578,6 @@ namespace Control
             if ( !isUsingMPF )
                 return;
 
-//            if ( isUsingMPF )
-//                inf("isUsingMPF = true");
-//            else
-//                inf("isUsingMPF = false");
-
             // Update the path variables
             updatePathVariables(&ts);
 
@@ -604,15 +597,16 @@ namespace Control
             }
 
             // Change the desired path in Neptus
-//            double pref_lat; double pref_lon;
-//            WGS84::displace(m_ctrl_var.P_ref(0,0),m_ctrl_var.P_ref(1,0), &pref_lat, &pref_lon);
-//            dpath.end_lat = pref_lat;
-//            dpath.end_lon = pref_lon;
-//            WGS84::displacement(pref_lat, target_state->lon, 0,
-//                                m_state.lat, m_state.lon, 0,
-//                                &m_target_es.Pvt0.x, &m_target_es.Pvt0.y);
-            //inf("Virtual point coords = (%f, %f)", pref_lat, pref_lon);
-//            dispatch(dpath);
+            double pref_lat; double pref_lon;
+            pref_lat = state.lat; pref_lon = state.lon;
+            IMC::PathControlState path_ctrl_s;
+            WGS84::displace(m_ctrl_var.P_ref(0,0),m_ctrl_var.P_ref(1,0), &pref_lat, &pref_lon);
+            path_ctrl_s.end_lat = pref_lat;
+            path_ctrl_s.end_lon = pref_lon;
+            path_ctrl_s.start_lat = state.lat;
+            path_ctrl_s.start_lon = state.lon;
+
+            dispatch(path_ctrl_s);
 
             // Update errors (world and local coordinates)
             m_ctrl_var.World_error = m_state.Pv - m_ctrl_var.P_ref;
@@ -652,18 +646,6 @@ namespace Control
             m_speed_cmd.value = sat(m_ctrl_var.cmd(0,0), m_ctrl_params.min_speed, m_ctrl_params.max_speed);
             m_hrate_cmd.value = sat(m_ctrl_var.cmd(1,0), m_ctrl_params.min_omega, m_ctrl_params.max_omega);
 
-            // Check if the MPF controller is stuck due to its initial position: if so, execute VectorField control
-//            VF_params.stuck = isStuck(&ts);
-//            if ( VF_params.stuck ) {
-//                disableControlLoops(IMC::CL_YAW_RATE);
-//                enableControlLoops(IMC::CL_YAW);
-//                executeVectorField(state, ts);
-//                inf("MPF controller is stuck... executing VectorField controller.");
-//            } else {
-//                disableControlLoops(IMC::CL_YAW);
-//                enableControlLoops(IMC::CL_YAW_RATE);
-//            }
-
 //            dispatch(m_speed_cmd,Tasks::DF_LOOP_BACK);
             dispatch(m_speed_cmd);
             dispatch(m_hrate_cmd);
@@ -678,7 +660,6 @@ namespace Control
             MPFVar.sat_ctrl_cmd_omega = m_hrate_cmd.value;
             MPFVar.robust_v = m_ctrl_var.robust(0,0);
             MPFVar.robust_omega = m_ctrl_var.robust(1,0);
-//            MPFVar.stuck = VF_params.stuck;
 
             // Path variables
             MPFVar.gamma = m_ctrl_var.gamma;
@@ -760,41 +741,11 @@ namespace Control
         {
         }
 
-//        //! Main loop.
-//        void
-//        onMain(void)
-//        {
-//          while (!stopping())
-//          {
-////              m_ctx.config.get("Control.Path.MPF", "Use MPF controller?", "false", useMPF);
-////              bool isUsingMPF; castLexical(useMPF, isUsingMPF);
-////              if ( isUsingMPF )
-////                  requestActivation();
-////              else
-////                  requestDeactivation();
-//            //waitForMessages(1.0);
-//          }
-//        }
-
         //! Saturation function (for control commands)
         static double sat(double value, double min, double max)
         {
           return (value < min) ? min : (value > max) ? max : value;
         }
-
-//        ! Check if the MPF control is saturated in zero.
-//        bool
-//        isStuck(const TrackingState* ts)
-//        {
-//            if (m_speed_cmd.value <= 0) {
-//                VF_params.time_stuck = VF_params.time_stuck + ts->delta;
-//                if ( VF_params.time_stuck >= VF_params.time_stuck_threshold )
-//                    return true;
-//            } else {
-//                VF_params.time_stuck = 0.0;
-//                return false;
-//            }
-//        }
 
 //        ! Simulates the target as a linear dynamic system.
 //        void

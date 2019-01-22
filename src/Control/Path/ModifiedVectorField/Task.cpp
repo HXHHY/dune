@@ -158,6 +158,7 @@ namespace Control
             m_args.dspeed_units = dpath->speed_units;
         }
 
+        //! Executes only on the activation of the path
         void
         onPathActivation(void)
         {
@@ -167,10 +168,6 @@ namespace Control
             bool isUsingMPF; castLexical(useMPF, isUsingMPF);
             if (isUsingMPF && !m_args.isDispatching)
                 return;
-
-            // Activate heading controller and deactivate the yaw rate controller.
-//             = 0.0;
-//            dispatch(m_speed);
 
             m_speed.value = m_args.dspeed;
             m_speed.speed_units = m_args.dspeed_units;
@@ -200,11 +197,6 @@ namespace Control
             m_speed.value = m_args.dspeed;
             m_speed.speed_units = m_args.dspeed_units;
             dispatch(m_speed);
-
-//            if ( m_args.isUsingMVF )
-//                inf("isUsingMVF = true");
-//            else
-//                inf("isUsingMVF = false");
 
             // Note:
             // cross-track position (lateral error) = ts.track_pos.y
@@ -295,6 +287,7 @@ namespace Control
 
         }
 
+        //! Executes only on the deactivation of the path
         void
         onPathDeactivation(void)
         {
