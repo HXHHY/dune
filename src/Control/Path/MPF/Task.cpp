@@ -44,10 +44,11 @@ namespace Control
           IMC::DesiredHeadingRate m_hrate_cmd;           // Desired heading rate
           IMC::DesiredHeadingRate m_heading_cmd;         // Desired heading for the Vector Field controller
           IMC::TargetState m_target_state;               // Target state
-          IMC::MPFVariables MPFVar;
-//           IMC::DesiredZ m_depth_cmd;                  // Desired depth
+          IMC::MPFVariables MPFVar;                      // Important variables to be recorded
+//          IMC::DesiredPath dpath;                        // Desired path message to be sent to Neptus
+//          IMC::DesiredZ m_depth_cmd;                  // Desired depth
 
-          bool use_controller;
+          bool isUsingMPF;
 
           struct Coord {
               fp64_t x;
@@ -124,6 +125,9 @@ namespace Control
               Coord start, end;             // Start and end points
               Coord target_state;           // Coordinates of the target state
               Coord Pvt0;                   // Initial displacement btw the target and the vehicle
+
+              fp64_t lat;                   // Latitude
+              fp64_t lon;                   // Longitude
 
               Matrix Pt;                    // Target inertial position
               Matrix dPt;                   // Target inertial velocity
@@ -243,20 +247,20 @@ namespace Control
                       .defaultValue("false")
                       .description("True if the target is stationary (end of the Tracking State).");
 
-              param("Use MPF controller?", use_controller)
+              param("Use MPF controller?", isUsingMPF)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
-                      .defaultValue("true")
+                      .defaultValue("false")
                       .description("Use MPF as path controller.");
 
               param("Target Name", m_target_params.name)
-                      .defaultValue("lauv-noptilus-1")
+                      .defaultValue("lauv-nemo-1")
                       .description("Name of the target vehicle.");
 
               param("Estimate Velocity?", m_ctrl_params.compVel)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
-                      .defaultValue("false")
+                      .defaultValue("true")
                       .description("True if the target velocity is being compensated.");
 
               param("Rho Gain", m_ctrl_params.rho)
@@ -277,9 +281,7 @@ namespace Control
         //! Update internal state with new parameter values.
         void
         onUpdateParameters(void)
-        {
-            if (!use_controller)
-                return;
+        {   
 
             // parameters were set
             PathController::onUpdateParameters();
@@ -334,13 +336,23 @@ namespace Control
             m_target_es.dPt = temp2DzeroVector;
 
             inf(DTR("Target ID is %d"), m_target_params.ID);
+
+            if ( isUsingMPF ){
+                enableControlLoops(IMC::CL_SPEED | IMC::CL_YAW_RATE);
+                disableControlLoops(IMC::CL_YAW);
+            }
+            else {
+                disableControlLoops(IMC::CL_YAW_RATE);
+                enableControlLoops(IMC::CL_YAW);
+            }
+
         }
 
         //! Activates at the beginning of the path.
         void
         onPathStartup(const IMC::EstimatedState& state, const TrackingState& ts)
         {
-            if (!use_controller)
+            if ( !isUsingMPF )
                 return;
 
             inf("Path startup!");
@@ -389,12 +401,14 @@ namespace Control
         void
         onPathActivation(void)
         {
-            if (!use_controller)
+            if ( !isUsingMPF )
                 return;
 
             // Activate controllers.
+            disableControlLoops(IMC::CL_YAW);
             enableControlLoops(IMC::CL_SPEED | IMC::CL_YAW_RATE);
-            //enableControlLoops(IMC::CL_SPEED | IMC::CL_YAW_RATE | IMC::CL_DEPTH);
+//            m_speed_cmd.value = 0.0;
+//            dispatch(m_speed_cmd);
 
             inf("Executing MPF-epsilon controller.");
         }
@@ -402,6 +416,9 @@ namespace Control
         void
         onPathDeactivation(void)
         {
+            if ( !isUsingMPF )
+                return;
+
             m_target_state.vx = 0.0;
             m_target_state.vy = 0.0;
             dispatch(m_target_state);
@@ -518,10 +535,22 @@ namespace Control
             inf("Gamma = %f", m_ctrl_var.gamma);
         }
 
+//        //! Consumer for GpsFix message
+//        void
+//        consume(const IMC::GpsFix* msg)
+//        {
+//            // Compute message comes from the target
+//            if (msg->getSource() == m_target_params.ID) {
+//                m_target_es.lat = msg->lat;
+//                m_target_es.lon = msg->lon;
+//            }
+//        }
+
         //! Consumer for a TargetState message
         void
         consume(const IMC::TargetState* target_state)
         {
+
             // Compute target position wrt the follower
             if (target_state->getSource() == m_target_params.ID) {
 
@@ -548,8 +577,13 @@ namespace Control
         void
         step(const IMC::EstimatedState& state, const TrackingState& ts)
         {
-            if (!use_controller)
+            if ( !isUsingMPF )
                 return;
+
+//            if ( isUsingMPF )
+//                inf("isUsingMPF = true");
+//            else
+//                inf("isUsingMPF = false");
 
             // Update the path variables
             updatePathVariables(&ts);
@@ -568,6 +602,17 @@ namespace Control
                 inf("Target position = (%f, %f)", m_target_es.Pt(0,0), m_target_es.Pt(1,0));
                 inf("Target velocity = (%f, %f)", m_target_es.dPt(0,0), m_target_es.dPt(1,0));
             }
+
+            // Change the desired path in Neptus
+//            double pref_lat; double pref_lon;
+//            WGS84::displace(m_ctrl_var.P_ref(0,0),m_ctrl_var.P_ref(1,0), &pref_lat, &pref_lon);
+//            dpath.end_lat = pref_lat;
+//            dpath.end_lon = pref_lon;
+//            WGS84::displacement(pref_lat, target_state->lon, 0,
+//                                m_state.lat, m_state.lon, 0,
+//                                &m_target_es.Pvt0.x, &m_target_es.Pvt0.y);
+            //inf("Virtual point coords = (%f, %f)", pref_lat, pref_lon);
+//            dispatch(dpath);
 
             // Update errors (world and local coordinates)
             m_ctrl_var.World_error = m_state.Pv - m_ctrl_var.P_ref;
@@ -619,7 +664,8 @@ namespace Control
 //                enableControlLoops(IMC::CL_YAW_RATE);
 //            }
 
-            dispatch(m_speed_cmd,Tasks::DF_LOOP_BACK);
+//            dispatch(m_speed_cmd,Tasks::DF_LOOP_BACK);
+            dispatch(m_speed_cmd);
             dispatch(m_hrate_cmd);
 
             // Logging
@@ -686,6 +732,8 @@ namespace Control
         void
         loiter(const IMC::EstimatedState& state, const TrackingState& ts)
         {
+            if ( !isUsingMPF )
+                return;
         }
 
         //! Resolve entity names.
@@ -712,15 +760,21 @@ namespace Control
         {
         }
 
-        //! Main loop.
-        void
-        onMain(void)
-        {
-          while (!stopping())
-          {
-            waitForMessages(1.0);
-          }
-        }
+//        //! Main loop.
+//        void
+//        onMain(void)
+//        {
+//          while (!stopping())
+//          {
+////              m_ctx.config.get("Control.Path.MPF", "Use MPF controller?", "false", useMPF);
+////              bool isUsingMPF; castLexical(useMPF, isUsingMPF);
+////              if ( isUsingMPF )
+////                  requestActivation();
+////              else
+////                  requestDeactivation();
+//            //waitForMessages(1.0);
+//          }
+//        }
 
         //! Saturation function (for control commands)
         static double sat(double value, double min, double max)

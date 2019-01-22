@@ -615,6 +615,8 @@ namespace DUNE
       // Save new EstimatedState values
       m_estate = *es;
 
+     // inf("active: %d, error: %d, tracking: %d", isActive(), m_error, m_tracking);
+
       if (!isActive() || m_error || !m_tracking)
         return;
 
@@ -658,8 +660,12 @@ namespace DUNE
 
       double now = Clock::get();
 
+      //inf("active: %d, error: %d, tracking: %d, next run: %d", isActive(), m_error, m_tracking, (m  _ts.now + m_cperiod) - now);
+
       if (now < m_ts.now + m_cperiod)
         return;
+
+
 
       m_ts.delta = now - m_ts.now;
       m_ts.now = now;
