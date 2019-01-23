@@ -59,6 +59,7 @@ namespace Control
         fp32_t dspeed;
         uint8_t dspeed_units;
         bool isDispatching;
+        double msg_period;
       };
 
       struct Task: public DUNE::Control::PathController
@@ -75,6 +76,8 @@ namespace Control
         IMC::TargetState m_target_state;
         //! Task arguments.
         Arguments m_args;
+        //! Timer for dispatching the target state
+        Time::Counter<double> m_timer;
 
         Task(const std::string& name, Tasks::Context& ctx):
             DUNE::Control::PathController(name, ctx)
@@ -109,11 +112,13 @@ namespace Control
                     .defaultValue("false")
                     .description("True if vehicle is dispatching its state.");
 
-//            param("Use Vector Field controller?", m_args.isUsingMVF)
-//                    .visibility(Tasks::Parameter::VISIBILITY_USER)
-//                    .scope(Tasks::Parameter::SCOPE_MANEUVER)
-//                    .defaultValue("true")
-//                    .description("Use modified VectorField as path controller.");
+            param("Message Periodicity", m_args.msg_period)
+                    .visibility(Tasks::Parameter::VISIBILITY_USER)
+                    .scope(Tasks::Parameter::SCOPE_GLOBAL)
+                    .units(Units::Second)
+                    .defaultValue("0")
+                    //.minimumValue("0.0")
+                    .description("Sample time for the TargetState messages.");
 
             bind<IMC::DesiredPath>(this);
         }
@@ -123,6 +128,10 @@ namespace Control
         {
 
             PathController::onUpdateParameters();
+
+            m_timer.reset();
+            if (paramChanged(m_args.msg_period))
+                m_timer.setTop(m_args.msg_period);
 
             if (paramChanged(m_args.entry_angle))
                 m_args.entry_angle = Angles::radians(m_args.entry_angle);
@@ -162,6 +171,8 @@ namespace Control
         void
         onPathActivation(void)
         {
+
+            m_timer.reset();
 
             std::string useMPF;
             m_ctx.config.get("Control.Path.MPF", "Use MPF controller?", "false", useMPF);
@@ -203,11 +214,10 @@ namespace Control
             // and along-track position = ts.track_pos.x
             double kcorr = ts.track_pos.y / m_args.corridor;
             double akcorr = std::fabs(kcorr);
-
             double ref;
 
-            // Dispatch vehicle state.
-            if ( m_args.isDispatching ) {
+            // Dispatch vehicle state each X seconds
+            if ( ( m_timer.overflow() || m_args.msg_period == 0 ) && m_args.isDispatching ) {
                 m_target_state.x = state.x;
                 m_target_state.y = state.y;
                 m_target_state.vx = state.vx;
@@ -215,8 +225,8 @@ namespace Control
                 m_target_state.lat = state.lat;
                 m_target_state.lon = state.lon;
                 dispatch(m_target_state);
-
-                inf("Vehicle position = (%f,%f)", m_target_state.x, m_target_state.y);
+                inf("Dispatching vehicle position = (%f,%f)", m_target_state.x, m_target_state.y);
+                m_timer.reset();
             }
 
             if (ts.track_pos.x > ts.track_length)
@@ -298,9 +308,11 @@ namespace Control
             if (isUsingMPF && !m_args.isDispatching)
                 return;
 
-            m_target_state.vx = 0.0;
-            m_target_state.vy = 0.0;
-            dispatch(m_target_state);
+            if ( m_args.isDispatching ) {
+                m_target_state.vx = 0.0;
+                m_target_state.vy = 0.0;
+                dispatch(m_target_state);
+            }
 
         }
 

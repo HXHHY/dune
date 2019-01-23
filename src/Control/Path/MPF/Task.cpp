@@ -82,6 +82,8 @@ namespace Control
 
               bool isFollowing;           // True if the controller is trying to follow some external vehicle
               bool compVel;               // True if target velocity is being compensated
+              bool target_flag = 1;       // Flag for recovering the initial received TargetState message
+              //bool vehicle_flag = 1;      // Flag for recovering the initial received EstimatedState message
           } m_ctrl_params;
 
           struct ControlVariables {
@@ -139,8 +141,8 @@ namespace Control
               Matrix Pv;                // Target inertial position.
               Matrix dPv;               // Target inertial velocity.
               Matrix Rv;                // Inertial rotation matrix.
-              fp64_t lat;
-              fp64_t lon;
+              fp64_t lat;               // Latitude of the vehicle
+              fp64_t lon;               // Longitude of the vehicle
           } m_state;
 
           //! Constructor.
@@ -299,8 +301,8 @@ namespace Control
             //m_ctrl_params.loiter_speed_const = 28.57143;
 
             // Initialize the path variables
-            m_ctrl_var.gamma = 0.0;
-            m_ctrl_var.gamma_dot = 0.0;
+            //m_ctrl_var.gamma = 0.0;
+            //m_ctrl_var.gamma_dot = 0.0;
 
             // Initialize the reference variables
             double temp2Dzeros[2] = {0.0, 0.0};
@@ -359,16 +361,16 @@ namespace Control
             //inf("Chosen path is ", m_ctrl_params.path_type);
             onUpdateParameters();
 
-            // If the vehicle is the target, dispatch its coordinates.
-            if ( getSystemId() == m_target_params.ID ) {
-                m_target_state.x = state.x;
-                m_target_state.y = state.y;
-                m_target_state.lat = state.lat;
-                m_target_state.lon = state.lon;
-                m_target_state.vx = state.vx;
-                m_target_state.vy = state.vy;
-                dispatch(m_target_state);
-            }
+//            // If the vehicle is the target, dispatch its coordinates.
+//            if ( getSystemId() == m_target_params.ID ) {
+//                m_target_state.x = state.x;
+//                m_target_state.y = state.y;
+//                m_target_state.lat = state.lat;
+//                m_target_state.lon = state.lon;
+//                m_target_state.vx = state.vx;
+//                m_target_state.vy = state.vy;
+//                dispatch(m_target_state);
+//            }
 
             // Reset gamma here according to the objective quadrant.
             m_ctrl_var.gamma = 0.0;
@@ -499,26 +501,23 @@ namespace Control
             Matrix tempdPvVec(tempdPv, 2, 1);
             m_state.dPv = tempdPvVec;
 
-            // Compute the initial NED displacement of the vehicle
-//            WGS84::displacement(0, 0, 0,
-//                                state->lat, state->lon, 0,
-//                                &m_state.NED.x, &m_state.NED.y);
-
-            // If vehicle is also the target, dispatch its GPS coordinates (WSG84).
-            if ( getSystemId() == m_target_params.ID ) {
-                m_target_state.x = state->x;
-                m_target_state.y = state->y;
-                m_target_state.z = state->z;
-                m_target_state.lat = state->lat;
-                m_target_state.lon = state->lon;
-                m_target_state.vx = state->vx;
-                m_target_state.vy = state->vy;
-                m_target_state.vz = state->vz;
-                dispatch(m_target_state);
-            }
+//            // If vehicle is also the target, dispatch its GPS coordinates (WSG84).
+//            if ( getSystemId() == m_target_params.ID ) {
+//                m_target_state.x = state->x;
+//                m_target_state.y = state->y;
+//                m_target_state.z = state->z;
+//                m_target_state.lat = state->lat;
+//                m_target_state.lon = state->lon;
+//                m_target_state.vx = state->vx;
+//                m_target_state.vy = state->vy;
+//                m_target_state.vz = state->vz;
+//                dispatch(m_target_state);
+//            }
 
             inf("Vehicle position = (%f, %f)", m_state.Pv(0,0), m_state.Pv(1,0));
             inf("Vehicle velocity = (%f, %f)", state->vx, state->vy);
+
+            //m_ctrl_params.vehicle_flag = 0;
         }
 
         //! Updates the state of the path variable gamma.
@@ -533,41 +532,39 @@ namespace Control
             inf("Gamma = %f", m_ctrl_var.gamma);
         }
 
-//        //! Consumer for GpsFix message
-//        void
-//        consume(const IMC::GpsFix* msg)
-//        {
-//            // Compute message comes from the target
-//            if (msg->getSource() == m_target_params.ID) {
-//                m_target_es.lat = msg->lat;
-//                m_target_es.lon = msg->lon;
-//            }
-//        }
-
         //! Consumer for a TargetState message
         void
         consume(const IMC::TargetState* target_state)
         {
 
-            // Compute target position wrt the follower
-            if (target_state->getSource() == m_target_params.ID) {
+            // Compute the initial displacement btw target and vehicle (just once)
+            if ( m_ctrl_params.target_flag && m_state.lat != 0 ) {
+                double pvt0_x = 0.0; double pvt0_y = 0.0;
 
-                // Compute the initial displacement btw target and vehicle
-                WGS84::displacement(target_state->lat, target_state->lon, 0,
-                                    m_state.lat, m_state.lon, 0,
-                                    &m_target_es.Pvt0.x, &m_target_es.Pvt0.y);
+                WGS84::displacement(m_state.lat       , m_state.lon       , 0,
+                                    target_state->lat , target_state->lon , 0,
+                                    &pvt0_x           , &pvt0_y );
 
-                double tempPt[2] = {target_state->x, target_state->y};
-                //double tempPt[2] = {target_state->x + m_target_es.Pvt0.x, target_state->y + m_target_es.Pvt0.y};
-                Matrix tempPtVec(tempPt, 2, 1);
-                m_target_es.Pt = tempPtVec;
+                m_target_es.Pvt0.x = pvt0_x; m_target_es.Pvt0.y = pvt0_y;
 
-                if (m_ctrl_params.compVel) {
-                    double tempdPt[2] = {target_state->vx, target_state->vy};
-                    Matrix tempdPtVec(tempdPt, 2, 1);
-                    m_target_es.dPt = tempdPtVec;
-                }
+                inf("Init displacment 1 = (%f,%f)", m_state.lat, m_state.lon);
+                inf("Init displacment 2 = (%f,%f)", target_state->lat, target_state->lon);
+                inf("Initial displacement btw vehicles = (%f,%f)", m_target_es.Pvt0.x, m_target_es.Pvt0.y);
+
+                m_ctrl_params.target_flag = 0;
             }
+
+            //double tempPt[2] = {target_state->x, target_state->y};
+            double tempPt[2] = {target_state->x + m_target_es.Pvt0.x, target_state->y + m_target_es.Pvt0.y};
+            Matrix tempPtVec(tempPt, 2, 1);
+            m_target_es.Pt = tempPtVec;
+
+            if (m_ctrl_params.compVel) {
+                double tempdPt[2] = {target_state->vx, target_state->vy};
+                Matrix tempdPtVec(tempdPt, 2, 1);
+                m_target_es.dPt = tempdPtVec;
+            }
+
         }
 
         //! Execute a path control step
