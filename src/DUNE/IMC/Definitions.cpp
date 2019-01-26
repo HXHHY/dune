@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 9799a7206dbfb1f79b5f5a55d65d960d                            *
+// IMC XML MD5: a18b01fa9c94fda29288d50d199f56f3                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -26487,6 +26487,7 @@ namespace DUNE
       depth = 0;
       speed = 0;
       psi = 0;
+      omega = 0;
     }
 
     bool
@@ -26504,6 +26505,7 @@ namespace DUNE
       if (depth != other__.depth) return false;
       if (speed != other__.speed) return false;
       if (psi != other__.psi) return false;
+      if (omega != other__.omega) return false;
       return true;
     }
 
@@ -26530,6 +26532,7 @@ namespace DUNE
       ptr__ += IMC::serialize(depth, ptr__);
       ptr__ += IMC::serialize(speed, ptr__);
       ptr__ += IMC::serialize(psi, ptr__);
+      ptr__ += IMC::serialize(omega, ptr__);
       return ptr__;
     }
 
@@ -26548,6 +26551,7 @@ namespace DUNE
       bfr__ += IMC::deserialize(depth, bfr__, size__);
       bfr__ += IMC::deserialize(speed, bfr__, size__);
       bfr__ += IMC::deserialize(psi, bfr__, size__);
+      bfr__ += IMC::deserialize(omega, bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -26566,6 +26570,7 @@ namespace DUNE
       bfr__ += IMC::deserialize(depth, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(speed, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(psi, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(omega, bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -26583,6 +26588,7 @@ namespace DUNE
       IMC::toJSON(os__, "depth", depth, nindent__);
       IMC::toJSON(os__, "speed", speed, nindent__);
       IMC::toJSON(os__, "psi", psi, nindent__);
+      IMC::toJSON(os__, "omega", omega, nindent__);
     }
 
     MPFVariables::MPFVariables(void)

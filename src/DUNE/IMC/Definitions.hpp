@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 9799a7206dbfb1f79b5f5a55d65d960d                            *
+// IMC XML MD5: a18b01fa9c94fda29288d50d199f56f3                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -24995,6 +24995,8 @@ namespace DUNE
       fp32_t speed;
       //! Heading.
       fp32_t psi;
+      //! Heading Rate.
+      fp32_t omega;
 
       static uint16_t
       getIdStatic(void)
@@ -25043,7 +25045,7 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 41;
+        return 45;
       }
 
       void

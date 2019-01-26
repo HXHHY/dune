@@ -220,8 +220,10 @@ namespace Control
             if ( ( m_timer.overflow() || m_args.msg_period == 0 ) && m_args.isDispatching ) {
                 m_target_state.x = state.x;
                 m_target_state.y = state.y;
+                m_target_state.psi = state.psi;
                 m_target_state.vx = state.vx;
                 m_target_state.vy = state.vy;
+                m_target_state.omega = state.r;
                 m_target_state.lat = state.lat;
                 m_target_state.lon = state.lon;
                 dispatch(m_target_state);
@@ -311,6 +313,7 @@ namespace Control
             if ( m_args.isDispatching ) {
                 m_target_state.vx = 0.0;
                 m_target_state.vy = 0.0;
+                m_target_state.omega = 0.0;
                 dispatch(m_target_state);
             }
 
