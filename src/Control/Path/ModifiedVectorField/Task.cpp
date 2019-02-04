@@ -117,8 +117,8 @@ namespace Control
                     .scope(Tasks::Parameter::SCOPE_GLOBAL)
                     .units(Units::Second)
                     .defaultValue("0")
-                    //.minimumValue("0.0")
-                    .description("Sample time for the TargetState messages.");
+                    .minimumValue("1.0")
+                    .description("Message periodicity for the TargetState Wifi messages.");
 
             bind<IMC::DesiredPath>(this);
         }
