@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: a18b01fa9c94fda29288d50d199f56f3                            *
+// IMC XML MD5: 2a39ad05f1ee6252f29ef5993b719833                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -26608,16 +26608,20 @@ namespace DUNE
       robust_omega = 0;
       gamma = 0;
       gamma_dot = 0;
+      gamma_ref = 0;
       g_err = 0;
       target_x = 0;
       target_y = 0;
       target_z = 0;
+      target_psi = 0;
       target_vx = 0;
       target_vy = 0;
       target_vz = 0;
+      target_omega = 0;
       x = 0;
       y = 0;
       z = 0;
+      psi = 0;
       vx = 0;
       vy = 0;
       vz = 0;
@@ -26632,13 +26636,15 @@ namespace DUNE
       err_x = 0;
       err_y = 0;
       err_z = 0;
-      start_x = 0;
-      start_y = 0;
-      start_z = 0;
-      end_x = 0;
-      end_y = 0;
-      end_z = 0;
-      stuck = 0;
+      pest_x = 0;
+      pest_y = 0;
+      psi_est = 0;
+      perr_x = 0;
+      perr_y = 0;
+      psi_err = 0;
+      dest_x = 0;
+      dest_y = 0;
+      domega_est = 0;
     }
 
     bool
@@ -26653,16 +26659,20 @@ namespace DUNE
       if (robust_omega != other__.robust_omega) return false;
       if (gamma != other__.gamma) return false;
       if (gamma_dot != other__.gamma_dot) return false;
+      if (gamma_ref != other__.gamma_ref) return false;
       if (g_err != other__.g_err) return false;
       if (target_x != other__.target_x) return false;
       if (target_y != other__.target_y) return false;
       if (target_z != other__.target_z) return false;
+      if (target_psi != other__.target_psi) return false;
       if (target_vx != other__.target_vx) return false;
       if (target_vy != other__.target_vy) return false;
       if (target_vz != other__.target_vz) return false;
+      if (target_omega != other__.target_omega) return false;
       if (x != other__.x) return false;
       if (y != other__.y) return false;
       if (z != other__.z) return false;
+      if (psi != other__.psi) return false;
       if (vx != other__.vx) return false;
       if (vy != other__.vy) return false;
       if (vz != other__.vz) return false;
@@ -26677,13 +26687,15 @@ namespace DUNE
       if (err_x != other__.err_x) return false;
       if (err_y != other__.err_y) return false;
       if (err_z != other__.err_z) return false;
-      if (start_x != other__.start_x) return false;
-      if (start_y != other__.start_y) return false;
-      if (start_z != other__.start_z) return false;
-      if (end_x != other__.end_x) return false;
-      if (end_y != other__.end_y) return false;
-      if (end_z != other__.end_z) return false;
-      if (stuck != other__.stuck) return false;
+      if (pest_x != other__.pest_x) return false;
+      if (pest_y != other__.pest_y) return false;
+      if (psi_est != other__.psi_est) return false;
+      if (perr_x != other__.perr_x) return false;
+      if (perr_y != other__.perr_y) return false;
+      if (psi_err != other__.psi_err) return false;
+      if (dest_x != other__.dest_x) return false;
+      if (dest_y != other__.dest_y) return false;
+      if (domega_est != other__.domega_est) return false;
       return true;
     }
 
@@ -26705,16 +26717,20 @@ namespace DUNE
       ptr__ += IMC::serialize(robust_omega, ptr__);
       ptr__ += IMC::serialize(gamma, ptr__);
       ptr__ += IMC::serialize(gamma_dot, ptr__);
+      ptr__ += IMC::serialize(gamma_ref, ptr__);
       ptr__ += IMC::serialize(g_err, ptr__);
       ptr__ += IMC::serialize(target_x, ptr__);
       ptr__ += IMC::serialize(target_y, ptr__);
       ptr__ += IMC::serialize(target_z, ptr__);
+      ptr__ += IMC::serialize(target_psi, ptr__);
       ptr__ += IMC::serialize(target_vx, ptr__);
       ptr__ += IMC::serialize(target_vy, ptr__);
       ptr__ += IMC::serialize(target_vz, ptr__);
+      ptr__ += IMC::serialize(target_omega, ptr__);
       ptr__ += IMC::serialize(x, ptr__);
       ptr__ += IMC::serialize(y, ptr__);
       ptr__ += IMC::serialize(z, ptr__);
+      ptr__ += IMC::serialize(psi, ptr__);
       ptr__ += IMC::serialize(vx, ptr__);
       ptr__ += IMC::serialize(vy, ptr__);
       ptr__ += IMC::serialize(vz, ptr__);
@@ -26729,13 +26745,15 @@ namespace DUNE
       ptr__ += IMC::serialize(err_x, ptr__);
       ptr__ += IMC::serialize(err_y, ptr__);
       ptr__ += IMC::serialize(err_z, ptr__);
-      ptr__ += IMC::serialize(start_x, ptr__);
-      ptr__ += IMC::serialize(start_y, ptr__);
-      ptr__ += IMC::serialize(start_z, ptr__);
-      ptr__ += IMC::serialize(end_x, ptr__);
-      ptr__ += IMC::serialize(end_y, ptr__);
-      ptr__ += IMC::serialize(end_z, ptr__);
-      ptr__ += IMC::serialize(stuck, ptr__);
+      ptr__ += IMC::serialize(pest_x, ptr__);
+      ptr__ += IMC::serialize(pest_y, ptr__);
+      ptr__ += IMC::serialize(psi_est, ptr__);
+      ptr__ += IMC::serialize(perr_x, ptr__);
+      ptr__ += IMC::serialize(perr_y, ptr__);
+      ptr__ += IMC::serialize(psi_err, ptr__);
+      ptr__ += IMC::serialize(dest_x, ptr__);
+      ptr__ += IMC::serialize(dest_y, ptr__);
+      ptr__ += IMC::serialize(domega_est, ptr__);
       return ptr__;
     }
 
@@ -26751,16 +26769,20 @@ namespace DUNE
       bfr__ += IMC::deserialize(robust_omega, bfr__, size__);
       bfr__ += IMC::deserialize(gamma, bfr__, size__);
       bfr__ += IMC::deserialize(gamma_dot, bfr__, size__);
+      bfr__ += IMC::deserialize(gamma_ref, bfr__, size__);
       bfr__ += IMC::deserialize(g_err, bfr__, size__);
       bfr__ += IMC::deserialize(target_x, bfr__, size__);
       bfr__ += IMC::deserialize(target_y, bfr__, size__);
       bfr__ += IMC::deserialize(target_z, bfr__, size__);
+      bfr__ += IMC::deserialize(target_psi, bfr__, size__);
       bfr__ += IMC::deserialize(target_vx, bfr__, size__);
       bfr__ += IMC::deserialize(target_vy, bfr__, size__);
       bfr__ += IMC::deserialize(target_vz, bfr__, size__);
+      bfr__ += IMC::deserialize(target_omega, bfr__, size__);
       bfr__ += IMC::deserialize(x, bfr__, size__);
       bfr__ += IMC::deserialize(y, bfr__, size__);
       bfr__ += IMC::deserialize(z, bfr__, size__);
+      bfr__ += IMC::deserialize(psi, bfr__, size__);
       bfr__ += IMC::deserialize(vx, bfr__, size__);
       bfr__ += IMC::deserialize(vy, bfr__, size__);
       bfr__ += IMC::deserialize(vz, bfr__, size__);
@@ -26775,13 +26797,15 @@ namespace DUNE
       bfr__ += IMC::deserialize(err_x, bfr__, size__);
       bfr__ += IMC::deserialize(err_y, bfr__, size__);
       bfr__ += IMC::deserialize(err_z, bfr__, size__);
-      bfr__ += IMC::deserialize(start_x, bfr__, size__);
-      bfr__ += IMC::deserialize(start_y, bfr__, size__);
-      bfr__ += IMC::deserialize(start_z, bfr__, size__);
-      bfr__ += IMC::deserialize(end_x, bfr__, size__);
-      bfr__ += IMC::deserialize(end_y, bfr__, size__);
-      bfr__ += IMC::deserialize(end_z, bfr__, size__);
-      bfr__ += IMC::deserialize(stuck, bfr__, size__);
+      bfr__ += IMC::deserialize(pest_x, bfr__, size__);
+      bfr__ += IMC::deserialize(pest_y, bfr__, size__);
+      bfr__ += IMC::deserialize(psi_est, bfr__, size__);
+      bfr__ += IMC::deserialize(perr_x, bfr__, size__);
+      bfr__ += IMC::deserialize(perr_y, bfr__, size__);
+      bfr__ += IMC::deserialize(psi_err, bfr__, size__);
+      bfr__ += IMC::deserialize(dest_x, bfr__, size__);
+      bfr__ += IMC::deserialize(dest_y, bfr__, size__);
+      bfr__ += IMC::deserialize(domega_est, bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -26797,16 +26821,20 @@ namespace DUNE
       bfr__ += IMC::reverseDeserialize(robust_omega, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(gamma, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(gamma_dot, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(gamma_ref, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(g_err, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(target_x, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(target_y, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(target_z, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(target_psi, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(target_vx, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(target_vy, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(target_vz, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(target_omega, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(x, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(y, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(z, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(psi, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(vx, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(vy, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(vz, bfr__, size__);
@@ -26821,13 +26849,15 @@ namespace DUNE
       bfr__ += IMC::reverseDeserialize(err_x, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(err_y, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(err_z, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(start_x, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(start_y, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(start_z, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(end_x, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(end_y, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(end_z, bfr__, size__);
-      bfr__ += IMC::deserialize(stuck, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(pest_x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(pest_y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(psi_est, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(perr_x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(perr_y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(psi_err, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(dest_x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(dest_y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(domega_est, bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -26842,16 +26872,20 @@ namespace DUNE
       IMC::toJSON(os__, "robust_omega", robust_omega, nindent__);
       IMC::toJSON(os__, "gamma", gamma, nindent__);
       IMC::toJSON(os__, "gamma_dot", gamma_dot, nindent__);
+      IMC::toJSON(os__, "gamma_ref", gamma_ref, nindent__);
       IMC::toJSON(os__, "g_err", g_err, nindent__);
       IMC::toJSON(os__, "target_x", target_x, nindent__);
       IMC::toJSON(os__, "target_y", target_y, nindent__);
       IMC::toJSON(os__, "target_z", target_z, nindent__);
+      IMC::toJSON(os__, "target_psi", target_psi, nindent__);
       IMC::toJSON(os__, "target_vx", target_vx, nindent__);
       IMC::toJSON(os__, "target_vy", target_vy, nindent__);
       IMC::toJSON(os__, "target_vz", target_vz, nindent__);
+      IMC::toJSON(os__, "target_omega", target_omega, nindent__);
       IMC::toJSON(os__, "x", x, nindent__);
       IMC::toJSON(os__, "y", y, nindent__);
       IMC::toJSON(os__, "z", z, nindent__);
+      IMC::toJSON(os__, "psi", psi, nindent__);
       IMC::toJSON(os__, "vx", vx, nindent__);
       IMC::toJSON(os__, "vy", vy, nindent__);
       IMC::toJSON(os__, "vz", vz, nindent__);
@@ -26866,13 +26900,15 @@ namespace DUNE
       IMC::toJSON(os__, "err_x", err_x, nindent__);
       IMC::toJSON(os__, "err_y", err_y, nindent__);
       IMC::toJSON(os__, "err_z", err_z, nindent__);
-      IMC::toJSON(os__, "start_x", start_x, nindent__);
-      IMC::toJSON(os__, "start_y", start_y, nindent__);
-      IMC::toJSON(os__, "start_z", start_z, nindent__);
-      IMC::toJSON(os__, "end_x", end_x, nindent__);
-      IMC::toJSON(os__, "end_y", end_y, nindent__);
-      IMC::toJSON(os__, "end_z", end_z, nindent__);
-      IMC::toJSON(os__, "stuck", stuck, nindent__);
+      IMC::toJSON(os__, "pest_x", pest_x, nindent__);
+      IMC::toJSON(os__, "pest_y", pest_y, nindent__);
+      IMC::toJSON(os__, "psi_est", psi_est, nindent__);
+      IMC::toJSON(os__, "perr_x", perr_x, nindent__);
+      IMC::toJSON(os__, "perr_y", perr_y, nindent__);
+      IMC::toJSON(os__, "psi_err", psi_err, nindent__);
+      IMC::toJSON(os__, "dest_x", dest_x, nindent__);
+      IMC::toJSON(os__, "dest_y", dest_y, nindent__);
+      IMC::toJSON(os__, "domega_est", domega_est, nindent__);
     }
 
     TotalMagIntensity::TotalMagIntensity(void)

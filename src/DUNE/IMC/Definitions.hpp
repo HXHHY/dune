@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: a18b01fa9c94fda29288d50d199f56f3                            *
+// IMC XML MD5: 2a39ad05f1ee6252f29ef5993b719833                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -25072,6 +25072,8 @@ namespace DUNE
       fp32_t gamma;
       //! Path variable speed.
       fp32_t gamma_dot;
+      //! Path desired speed.
+      fp32_t gamma_ref;
       //! PF Correction.
       fp32_t g_err;
       //! Target position x.
@@ -25080,18 +25082,24 @@ namespace DUNE
       fp32_t target_y;
       //! Target position z.
       fp32_t target_z;
+      //! Target yaw angle psi.
+      fp32_t target_psi;
       //! Target velocity vx.
       fp32_t target_vx;
       //! Target velocity vy.
       fp32_t target_vy;
       //! Target velocity vz.
       fp32_t target_vz;
+      //! Target velocity omega.
+      fp32_t target_omega;
       //! Vehicle position x.
       fp32_t x;
       //! Vehicle position y.
       fp32_t y;
       //! Vehicle position z.
       fp32_t z;
+      //! Vehicle yaw angle psi.
+      fp32_t psi;
       //! Vehicle velocity x.
       fp32_t vx;
       //! Vehicle velocity y.
@@ -25120,20 +25128,24 @@ namespace DUNE
       fp32_t err_y;
       //! World Error z.
       fp32_t err_z;
-      //! Tracking state start x.
-      fp32_t start_x;
-      //! Tracking state start y.
-      fp32_t start_y;
-      //! Tracking state start z.
-      fp32_t start_z;
-      //! Tracking state end x.
-      fp32_t end_x;
-      //! Tracking state end y.
-      fp32_t end_y;
-      //! Tracking state end z.
-      fp32_t end_z;
-      //! Is controller stuck.
-      uint8_t stuck;
+      //! Vehicle position estimate x.
+      fp32_t pest_x;
+      //! Vehicle position estimate y.
+      fp32_t pest_y;
+      //! Vehicle yaw angle estimate psi.
+      fp32_t psi_est;
+      //! Position estimation error on x.
+      fp32_t perr_x;
+      //! Position estimation error on y.
+      fp32_t perr_y;
+      //! Yaw angle estimation error.
+      fp32_t psi_err;
+      //! Disturbance estimate on the x direction.
+      fp32_t dest_x;
+      //! Disturbance estimate on the y direction.
+      fp32_t dest_y;
+      //! Rotational disturbance estimate.
+      fp32_t domega_est;
 
       static uint16_t
       getIdStatic(void)
@@ -25182,7 +25194,7 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 153;
+        return 180;
       }
 
       void

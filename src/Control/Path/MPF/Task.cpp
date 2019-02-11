@@ -49,7 +49,11 @@ namespace Control
               STATE_VX    = 3,
               STATE_VY    = 4,
               STATE_OMEGA = 5,
-              NUM_STATES   = 6,
+              NUM_STATES  = 6,
+//              STATE_AX    = 6,
+//              STATE_AY    = 7,
+//              STATE_ALPHA = 8,
+//              NUM_STATES  = 9,
           };
 
           //! Output indexes for the Kalman Filter
@@ -101,6 +105,7 @@ namespace Control
               Matrix delta_inv;              // Inverse of delta matrix
               Matrix Kp;                     // Gain matrix composed for k_gain.x and k_gain.y
               Matrix Eps;                    // Constant MPF vector
+              Matrix Sepsilon;               // Epsilon vector
 
               fp32_t dt;                     // Control period
               fp64_t epsilon;                // epsilon error
@@ -155,16 +160,23 @@ namespace Control
               Matrix K1;
               Matrix K2;
               std::vector<double> gains;
+              double Komega1;
+              double Komega2;
           } obsv_params;
 
           //! Important variables for the current observer
-          struct ObserverVariables {
+          struct ObserverVariables {              
               Matrix Pest;          // Estimated position
               Matrix Dest;          // Estimated disturbance
               Matrix Perr;          // Estimation error on position
-              Matrix Derr;          // Estimation error on disturbance
               Matrix dPest;         // Derivative of estimated position
               Matrix dDest;         // Derivative of estimated disturbance
+
+              double psi_est;       // Estimated yaw angle
+              double Domega_est;    // Estimated rotational disturbance
+              double psi_err;       // Estimation error on orientation
+              double dpsi_est;      // Derivative of estimated yaw angle
+              double dDomega_est;   // Derivative of estimated rotational disturbance
           } obsv_state;
 
           //! Structure containing the path parameters
@@ -175,6 +187,7 @@ namespace Control
               double r;             // If path is a circle, r is the radius
               double lampl;         // Amplitude of the lemniscate path
               double lomega;        // Frequency of the lemniscate path
+              double max_ecc;       // Maximum eccentricity between the two axis of the ellipse
 
               bool make8;           // True if lemniscate main axis is the y-direction (Inf form); False otherwise (8 form)
           } m_path_params;
@@ -189,10 +202,9 @@ namespace Control
 
           //! Important variables containing the state of the target
           struct TargetState {
-              Coord start, end;             // Start and end points
               Coord target_state;           // Coordinates of the target state
               Coord Pvt0;                   // Initial displacement btw the target and the vehicle
-              Coord newCoord;               //
+              Coord newCoord;               // New coordinate received from the target vehicle
 
               fp64_t lat;                   // Latitude
               fp64_t lon;                   // Longitude
@@ -208,12 +220,12 @@ namespace Control
 
           //! Important variables containing the state of the vehicle
           struct VehicleState {
-              Matrix Pv;                // Target inertial position.
-              Matrix dPv;               // Target inertial velocity.
-              Matrix Rv;                // Inertial rotation matrix.
+              Matrix Pv;                // Target inertial position
+              Matrix dPv;               // Target inertial velocity
+              Matrix Rv;                // Inertial rotation matrix
+              fp32_t psi;               // Yaw angle of the vehicle
               fp64_t lat;               // Latitude of the vehicle
               fp64_t lon;               // Longitude of the vehicle
-              fp64_t u;
           } m_state;
 
           //! Constructor.
@@ -319,11 +331,11 @@ namespace Control
                       .defaultValue("20.0")
                       .description("Amplitude of the lemniscate path.");
 
-              param("Lemniscate frequency", m_path_params.lomega)
-                      .visibility(Tasks::Parameter::VISIBILITY_USER)
-                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
-                      .defaultValue("0.1")
-                      .description("Frequency of the lemniscate path.");
+//              param("Lemniscate frequency", m_path_params.lomega)
+//                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+//                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
+//                      .defaultValue("0.01")
+//                      .description("Frequency of the lemniscate path.");
 
               param("Lemniscate shape (8 or Inf)", m_path_params.make8)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
@@ -348,7 +360,7 @@ namespace Control
                       .description("Compensate maritime currents with a constant disturbance observer.");
 
               param("Observer Gains", obsv_params.gains)
-                      .size(4)
+                      .size(6)
                       .defaultValue("")
                       .description("Gains for the disturbance observer.");
 
@@ -450,17 +462,26 @@ namespace Control
                 m_ctrl_params.path_type = 0;
             }
 
-            // Initialize current observer
+            // Initialize path variables
+            m_path_params.max_ecc = std::max(m_path_params.ampl.x, m_path_params.ampl.y);
+
+            // Initialize disturbance observer
             double tempGain2[4] = {obsv_params.gains[0], 0.0, 0.0, obsv_params.gains[2]};
             Matrix gainMatrix2(tempGain2, 2, 2);
             obsv_params.K1 = gainMatrix2;
             double tempGain3[4] = {obsv_params.gains[1], 0.0, 0.0, obsv_params.gains[3]};
             Matrix gainMatrix3(tempGain3, 2, 2);
             obsv_params.K2 = gainMatrix3;
+            obsv_params.Komega1 = obsv_params.gains[5];
+            obsv_params.Komega1 = obsv_params.gains[6];
+
             obsv_state.Pest = temp2DzeroVector;
             obsv_state.Dest = temp2DzeroVector;
             obsv_state.dPest = temp2DzeroVector;
             obsv_state.dDest = temp2DzeroVector;
+
+            obsv_state.psi_est = 0.0;
+            obsv_state.Domega_est = 0.0;
 
             // Initializes target variables
             m_target_params.ID = resolveSystemName(m_target_params.name);
@@ -562,6 +583,9 @@ namespace Control
             a(STATE_X, STATE_VX) = 1;
             a(STATE_Y, STATE_VY) = 1;
             a(STATE_PSI, STATE_OMEGA) = 1;
+//            a(STATE_VX, STATE_AX) = 1;
+//            a(STATE_VY, STATE_AY) = 1;
+//            a(STATE_OMEGA, STATE_ALPHA) = 1;
 
             target_kalman.setCovariance(STATE_X, target_state_cov[0]);
             target_kalman.setCovariance(STATE_Y, target_state_cov[0]);
@@ -569,11 +593,9 @@ namespace Control
             target_kalman.setCovariance(STATE_VX, target_state_cov[2]);
             target_kalman.setCovariance(STATE_VY, target_state_cov[2]);
             target_kalman.setCovariance(STATE_OMEGA, target_state_cov[3]);
-
-//            Matrix tempQaVec(NUM_OUTPUTS, NUM_OUTPUTS, 0.0); Qa = tempQaVec;
-//            Qa(STATE_X, STATE_X) = pow(target_process_noise[0],2);
-//            Qa(STATE_Y, STATE_Y) = pow(target_process_noise[0],2);
-//            Qa(STATE_PSI, STATE_PSI) = pow(target_process_noise[1],2);
+//            target_kalman.setCovariance(STATE_AX, target_state_cov[4]);
+//            target_kalman.setCovariance(STATE_AY, target_state_cov[4]);
+//            target_kalman.setCovariance(STATE_ALPHA, target_state_cov[5]);
 
             target_kalman.setMeasurementNoise(OUTPUT_X, target_measure_noise[0]);
             target_kalman.setMeasurementNoise(OUTPUT_Y, target_measure_noise[0]);
@@ -603,16 +625,15 @@ namespace Control
                 break;
             // case is ellipse
             case 2:
-                double median; // The median value between the two axes of the ellipse
-                median = (m_path_params.ampl.x + m_path_params.ampl.y)/2;
-                Pdx = m_path_params.ampl.x*std::cos(m_ctrl_var.gamma/median);
-                Pdy = m_path_params.ampl.y*std::sin(m_ctrl_var.gamma/median);
-                grad_Pdx = -(m_path_params.ampl.x/median)*std::sin(m_ctrl_var.gamma/median);
-                grad_Pdy = (m_path_params.ampl.y/median)*std::cos(m_ctrl_var.gamma/median);
+                Pdx = m_path_params.ampl.x*std::cos(m_ctrl_var.gamma/m_path_params.max_ecc);
+                Pdy = m_path_params.ampl.y*std::sin(m_ctrl_var.gamma/m_path_params.max_ecc);
+                grad_Pdx = -(m_path_params.ampl.x/m_path_params.max_ecc)*std::sin(m_ctrl_var.gamma/m_path_params.max_ecc);
+                grad_Pdy = (m_path_params.ampl.y/m_path_params.max_ecc)*std::cos(m_ctrl_var.gamma/m_path_params.max_ecc);
                 break;
             // case is a lemniscate
             case 3:
                 double den;
+                m_path_params.lomega = 1/m_path_params.lampl;
                 den = pow(std::sin(m_path_params.lomega*m_ctrl_var.gamma),2) + 1;
                 if ( m_path_params.make8 ) {
                     Pdx = m_path_params.lampl*std::sin(m_path_params.lomega*m_ctrl_var.gamma)*std::cos(m_path_params.lomega*m_ctrl_var.gamma)/den;
@@ -646,8 +667,6 @@ namespace Control
         void
         computeVehicleState(const IMC::EstimatedState* state)
         {
-            m_state.u = state->u;
-
             // Compute vehicle inertial position
             double tempPv[2] = {state->x, state->y};
             Matrix tempPvVec(tempPv, 2, 1);
@@ -657,7 +676,8 @@ namespace Control
             m_state.lon = state->lon;
 
             // Compute vehicle rotation matrix
-            double tempRv[4] = {std::cos(state->psi), -std::sin(state->psi), std::sin(state->psi), std::cos(state->psi)};
+            m_state.psi = state->psi;
+            double tempRv[4] = {std::cos(m_state.psi), -std::sin(m_state.psi), std::sin(m_state.psi), std::cos(m_state.psi)};
             Matrix tempRvVec(tempRv, 2, 2);
             m_state.Rv = tempRvVec;
 
@@ -739,14 +759,14 @@ namespace Control
             target_kalman.setTransitions(Ak);
 
             // Fill the process noise covariance matrix
-            target_kalman.setProcessNoise(STATE_X, STATE_X, 0.25*pow(tstep,4)*pow(target_process_noise[0],2) );
-            target_kalman.setProcessNoise(STATE_Y, STATE_Y, 0.25*pow(tstep,4)*pow(target_process_noise[0],2) );
-            target_kalman.setProcessNoise(STATE_PSI, STATE_PSI, 0.25*pow(tstep,4)*pow(target_process_noise[1],2) );
+            target_kalman.setProcessNoise(STATE_X, STATE_X, (1/4)*pow(tstep,4)*pow(target_process_noise[0],2) );
+            target_kalman.setProcessNoise(STATE_Y, STATE_Y, (1/4)*pow(tstep,4)*pow(target_process_noise[0],2) );
+            target_kalman.setProcessNoise(STATE_PSI, STATE_PSI, (1/4)*pow(tstep,4)*pow(target_process_noise[1],2) );
 
             target_kalman.setProcessNoise(STATE_X, STATE_VX, (1/3)*pow(tstep,3)*pow(target_process_noise[0],2) );
             target_kalman.setProcessNoise(STATE_Y, STATE_VY, (1/3)*pow(tstep,3)*pow(target_process_noise[0],2) );
             target_kalman.setProcessNoise(STATE_PSI, STATE_OMEGA, (1/3)*pow(tstep,3)*pow(target_process_noise[1],2) );
-
+            //--------------------------------------------------------------------------------------------------------
             target_kalman.setProcessNoise(STATE_VX, STATE_X, (1/3)*pow(tstep,3)*pow(target_process_noise[0],2) );
             target_kalman.setProcessNoise(STATE_VY, STATE_Y, (1/3)*pow(tstep,3)*pow(target_process_noise[0],2) );
             target_kalman.setProcessNoise(STATE_OMEGA, STATE_PSI, (1/3)*pow(tstep,3)*pow(target_process_noise[1],2) );
@@ -754,6 +774,43 @@ namespace Control
             target_kalman.setProcessNoise(STATE_VX, STATE_VX, pow(tstep,2)*pow(target_process_noise[0],2) );
             target_kalman.setProcessNoise(STATE_VY, STATE_VY, pow(tstep,2)*pow(target_process_noise[0],2) );
             target_kalman.setProcessNoise(STATE_OMEGA, STATE_OMEGA, pow(tstep,2)*pow(target_process_noise[1],2) );
+
+//            target_kalman.setProcessNoise(STATE_X, STATE_X, (1/9)*pow(tstep,6)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_Y, STATE_Y, (1/9)*pow(tstep,6)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_PSI, STATE_PSI, (1/9)*pow(tstep,6)*pow(target_process_noise[1],2) );
+
+//            target_kalman.setProcessNoise(STATE_X, STATE_VX, (1/6)*pow(tstep,5)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_Y, STATE_VY, (1/6)*pow(tstep,5)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_PSI, STATE_OMEGA, (1/6)*pow(tstep,5)*pow(target_process_noise[1],2) );
+
+//            target_kalman.setProcessNoise(STATE_X, STATE_AX, (1/3)*pow(tstep,4)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_Y, STATE_AY, (1/3)*pow(tstep,4)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_PSI, STATE_ALPHA, (1/3)*pow(tstep,4)*pow(target_process_noise[1],2) );
+//            //--------------------------------------------------------------------------------------------------------
+//            target_kalman.setProcessNoise(STATE_VX, STATE_X, (1/6)*pow(tstep,5)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_VY, STATE_Y, (1/6)*pow(tstep,5)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_OMEGA, STATE_PSI, (1/6)*pow(tstep,5)*pow(target_process_noise[1],2) );
+
+//            target_kalman.setProcessNoise(STATE_VX, STATE_VX, (1/4)*pow(tstep,4)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_VY, STATE_VY, (1/4)*pow(tstep,4)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_OMEGA, STATE_OMEGA, (1/4)*pow(tstep,4)*pow(target_process_noise[1],2) );
+
+//            target_kalman.setProcessNoise(STATE_VX, STATE_AX, (1/2)*pow(tstep,3)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_VY, STATE_AY, (1/2)*pow(tstep,3)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_OMEGA, STATE_ALPHA, (1/2)*pow(tstep,3)*pow(target_process_noise[1],2) );
+//            //--------------------------------------------------------------------------------------------------------
+//            target_kalman.setProcessNoise(STATE_AX, STATE_X, (1/3)*pow(tstep,4)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_AY, STATE_Y, (1/3)*pow(tstep,4)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_ALPHA, STATE_PSI, (1/3)*pow(tstep,4)*pow(target_process_noise[1],2) );
+
+//            target_kalman.setProcessNoise(STATE_AX, STATE_VX, (1/2)*pow(tstep,3)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_AY, STATE_VY, (1/2)*pow(tstep,3)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_ALPHA, STATE_OMEGA, (1/2)*pow(tstep,3)*pow(target_process_noise[1],2) );
+
+//            target_kalman.setProcessNoise(STATE_AX, STATE_AX, pow(tstep,2)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_AY, STATE_AY, pow(tstep,2)*pow(target_process_noise[0],2) );
+//            target_kalman.setProcessNoise(STATE_ALPHA, STATE_ALPHA, pow(tstep,2)*pow(target_process_noise[1],2) );
+
         }
 
         //! Update target state
@@ -869,12 +926,16 @@ namespace Control
             // Update observer state
             if ( m_ctrl_params.isObserving ) {
                 updateObserver(&ts);
-                inf("Estimated disturbance = (%f, %f)", obsv_state.Dest(0,0), obsv_state.Dest(1,0) );
+                inf("Position disturbance = (%f, %f)", obsv_state.Dest(0,0), obsv_state.Dest(1,0) );
+                inf("Rotation disturbance = %f", obsv_state.Domega_est );
+                double tempSepsilon[2] = {0.0, -m_ctrl_params.epsilon};
+                Matrix tempSepsilonVec(tempSepsilon, 2, 1);
+                m_ctrl_params.Sepsilon = tempSepsilonVec;
             }
 
             // Path Following controller 1: without saturation in control law
-            m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.MPF_error + transpose(m_state.Rv)*m_ctrl_var.dP_ref - m_ctrl_var.robust);
-//            m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.MPF_error + transpose(m_state.Rv)*(m_ctrl_var.dP_ref - obsv_state.Dest) - m_ctrl_var.robust);
+            // m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.MPF_error + transpose(m_state.Rv)*m_ctrl_var.dP_ref - m_ctrl_var.robust);
+            m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.MPF_error + transpose(m_state.Rv)*(m_ctrl_var.dP_ref - obsv_state.Dest) + m_ctrl_params.Sepsilon*obsv_state.Domega_est - m_ctrl_var.robust);
 
             // Path Following controller 2: with saturation in terms of tanh
             //m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.SatMPF_error + transpose(m_state.Rv)*m_ctrl_var.dP_ref - m_ctrl_var.robust);
@@ -903,20 +964,24 @@ namespace Control
             // Path variables
             MPFVar.gamma = m_ctrl_var.gamma;
             MPFVar.gamma_dot =   m_ctrl_var.gamma_dot;
+            MPFVar.gamma_ref = m_ctrl_var.gamma_ref;
             MPFVar.g_err = m_ctrl_var.g_err;
 
             // Target state
             MPFVar.target_x = m_target_es.Pt(0,0);
             MPFVar.target_y = m_target_es.Pt(1,0);
             MPFVar.target_z = m_target_state.z;
+            MPFVar.target_psi = m_target_es.psi;
             MPFVar.target_vx = m_target_es.dPt(0,0);
             MPFVar.target_vy = m_target_es.dPt(1,0);
             MPFVar.target_vz = m_target_state.vz;
+            MPFVar.target_omega = m_target_es.omega;
 
             // Vehicle state
             MPFVar.x = m_state.Pv(0,0);
             MPFVar.y = m_state.Pv(1,0);
             MPFVar.z = state.z;
+            MPFVar.psi = state.psi;
             MPFVar.vx = m_state.dPv(0,0);
             MPFVar.vy = m_state.dPv(1,0);
             MPFVar.vz = state.vz;
@@ -936,14 +1001,18 @@ namespace Control
             MPFVar.err_y = m_ctrl_var.World_error(1,0);
             MPFVar.err_z = 0.0;
 
-            // TrackingState data
-            MPFVar.start_x = ts.start.x;
-            MPFVar.start_y = ts.start.y;
-            MPFVar.start_z = ts.start.z;
-            MPFVar.end_x = ts.end.x;
-            MPFVar.end_y = ts.end.y;
-            MPFVar.end_z = ts.end.z;
-            //MPFVar.duration = Time::Clock::getSinceEpoch();
+            // Disturbance observer data
+            MPFVar.pest_x = obsv_state.Pest(0,0);
+            MPFVar.pest_y = obsv_state.Pest(1,0);
+            MPFVar.psi_est = obsv_state.psi_est;
+
+            MPFVar.perr_x = obsv_state.Perr(0,0);
+            MPFVar.perr_y = obsv_state.Perr(1,0);
+            MPFVar.psi_err = obsv_state.psi_err;
+
+            MPFVar.dest_x = obsv_state.Dest(0,0);
+            MPFVar.dest_y = obsv_state.Dest(1,0);
+            MPFVar.domega_est = obsv_state.Domega_est;
 
             // Dispatch log data
             dispatch(MPFVar);
@@ -991,7 +1060,8 @@ namespace Control
         updateObserver(const TrackingState* ts)
         {
 
-            // Compute position estimation error
+            //! Observer for the translational disturbance acting on the vehicle
+            // Compute estimation errors
             obsv_state.Perr = m_state.Pv - obsv_state.Pest;
 
             // Dynamic system for the observer
@@ -1010,6 +1080,20 @@ namespace Control
             obsv_state.Dest = tempDestVec;
 
             inf("Position estimation error = (%f, %f)", obsv_state.Perr(0,0), obsv_state.Perr(1,0) );
+
+            //! Observer for the rotational disturbance acting on the vehicle
+            // Compute estimation errors
+            obsv_state.psi_err = m_state.psi - obsv_state.psi_est;
+
+            // Dynamic system for the observer
+            obsv_state.dpsi_est = m_hrate_cmd.value + obsv_state.Domega_est + obsv_params.Komega1*obsv_state.psi_err;
+            obsv_state.dDomega_est = obsv_params.Komega2*obsv_state.psi_err;
+
+            // Update observer states
+            obsv_state.psi_est = obsv_state.psi_est + ts->delta*obsv_state.dpsi_est;
+            obsv_state.Domega_est = obsv_state.Domega_est + ts->delta*obsv_state.dDomega_est;
+
+            inf("Angle estimation error = %f", obsv_state.psi_err );
 
         }
       };
