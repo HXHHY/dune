@@ -79,6 +79,8 @@ namespace Control
           IMC::MPFVariables MPFVar;
           //! New path control state to visualize the virtual point in Neptus
           IMC::PathControlState path_ctrl_s;
+          //! Time
+          Time::Counter<double> m_timer;
 
           bool isUsingMPF;                   // Boolean to control the use of the MPF controller
           Matrix a;                          // Continuous state-transition matrix for the Kalman filter
@@ -194,10 +196,13 @@ namespace Control
 
           //! Target parameters
           struct TargetParams {
-              std::string name;     // Name of the target vehicle
-              unsigned ID;          // ID of the target vehicle in DUNE
-              double tol;           // Tolerance to the end
-              bool isNewCoord;      // True if new coordinate was received
+              std::string name;              // Name of the target vehicle
+              unsigned ID;                   // ID of the target vehicle in DUNE
+
+              double tol;                    // Tolerance to the end
+              double max_timer;              // Maximum time to wait until new data is received from the target
+
+              bool isNewCoord;               // True if new coordinate was received
           } m_target_params;
 
           //! Important variables containing the state of the target
@@ -383,6 +388,11 @@ namespace Control
                       .defaultValue("lauv-noptilus-1")
                       .description("Name of the target vehicle.");
 
+              param("Target Timer Param", m_target_params.max_timer)
+                      .minimumValue("5.0")
+                      .defaultValue("10.0")
+                      .description("Maximum time to wait for new target data.");
+
               param("Estimate Velocity?", m_ctrl_params.compVel)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
@@ -427,8 +437,11 @@ namespace Control
         onUpdateParameters(void)
         {   
             PathController::onUpdateParameters();
-
             inf(DTR("My name is %s, ID %d"), getSystemName(), getSystemId());
+
+            m_timer.reset();
+            if (paramChanged(m_target_params.max_timer))
+                m_timer.setTop(m_target_params.max_timer);
 
             double temp2Dzeros[2] = {0.0, 0.0};
             Matrix temp2DzeroVector(temp2Dzeros,2,1);
@@ -597,9 +610,6 @@ namespace Control
             a(STATE_X, STATE_VX) = 1;
             a(STATE_Y, STATE_VY) = 1;
             a(STATE_PSI, STATE_OMEGA) = 1;
-//            a(STATE_VX, STATE_AX) = 1;
-//            a(STATE_VY, STATE_AY) = 1;
-//            a(STATE_OMEGA, STATE_ALPHA) = 1;
 
             target_kalman.setCovariance(STATE_X, target_state_cov[0]);
             target_kalman.setCovariance(STATE_Y, target_state_cov[0]);
@@ -607,9 +617,6 @@ namespace Control
             target_kalman.setCovariance(STATE_VX, target_state_cov[2]);
             target_kalman.setCovariance(STATE_VY, target_state_cov[2]);
             target_kalman.setCovariance(STATE_OMEGA, target_state_cov[3]);
-//            target_kalman.setCovariance(STATE_AX, target_state_cov[4]);
-//            target_kalman.setCovariance(STATE_AY, target_state_cov[4]);
-//            target_kalman.setCovariance(STATE_ALPHA, target_state_cov[5]);
 
             target_kalman.setMeasurementNoise(OUTPUT_X, target_measure_noise[0]);
             target_kalman.setMeasurementNoise(OUTPUT_Y, target_measure_noise[0]);
@@ -736,9 +743,7 @@ namespace Control
         void
         consume(const IMC::TargetState* target_state)
         {
-            // Compute the target angle and velocity
-//            m_target_es.psi = target_state->psi;
-//            m_target_es.omega = target_state->omega;
+            m_timer.reset();
 
             // Compute the initial displacement btw target and vehicle (just once)
             if ( m_ctrl_params.target_flag && m_state.lat != 0 ) {
@@ -778,7 +783,6 @@ namespace Control
 
             // Discretize the state transition matrix
             Matrix Ak; Ak = (a * tstep).expmts();
-            // inf("Ak = %f, %f, %f", Ak(STATE_VX,STATE_VX), Ak(STATE_VY,STATE_VY), Ak(STATE_OMEGA,STATE_OMEGA) );
             target_kalman.setTransitions(Ak);
 
             // Fill the process noise covariance matrix
@@ -804,6 +808,13 @@ namespace Control
         void
         computeTargetState(const TrackingState* ts)
         {
+            // Forces target velocity to be zero, if no new data has been seen
+            if ( m_timer.overflow() ) {
+                target_kalman.setState(STATE_VX, 0.0);
+                target_kalman.setState(STATE_VY, 0.0);
+                target_kalman.setState(STATE_OMEGA, 0.0);
+            }
+
             // Predict next target state using the KF
             setKalman(ts); target_kalman.predict();
 
