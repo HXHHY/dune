@@ -227,10 +227,12 @@ namespace Control
 
           //! Important variables containing the state of the vehicle
           struct VehicleState {
+              int num_crossings;        // Number of turns around \pm \pi
               Matrix Pv;                // Target inertial position
               Matrix dPv;               // Target inertial velocity
               Matrix Rv;                // Inertial rotation matrix
               fp32_t psi;               // Yaw angle of the vehicle
+              fp32_t old_psi;           // Last yaw angle of the vehicle
               fp64_t lat;               // Latitude of the vehicle
               fp64_t lon;               // Longitude of the vehicle
           } m_state;
@@ -282,7 +284,7 @@ namespace Control
               param("Desired Speed", m_ctrl_var.gamma_ref)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
-                      .defaultValue("0.8")
+                      .defaultValue("1.0")
                       .description("Desired speed of the vehicle around the path, in m/s");
 
               param("Maximum Speed", m_ctrl_params.max_speed)
@@ -318,7 +320,7 @@ namespace Control
               param("Desired Path", m_ctrl_params.pathType)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
-                      .defaultValue("circle")
+                      .defaultValue("lemniscate")
                       .description("Defines the type of path around the moving target. Can be (i) circle, (ii) ellipse, (iii) lemniscate");
 
               param("Circle Radius", m_path_params.r)
@@ -344,12 +346,6 @@ namespace Control
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
                       .defaultValue("20.0")
                       .description("Amplitude of the lemniscate path.");
-
-//              param("Lemniscate frequency", m_path_params.lomega)
-//                      .visibility(Tasks::Parameter::VISIBILITY_USER)
-//                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
-//                      .defaultValue("0.01")
-//                      .description("Frequency of the lemniscate path.");
 
               param("Lemniscate shape (8 or Inf)", m_path_params.make8)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
@@ -402,7 +398,7 @@ namespace Control
               param("Rho Gain", m_ctrl_params.rho)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
-                      .defaultValue("0.5")
+                      .defaultValue("0.3")
                       .description("Gain for the robustness term.");
 
               param("Epsilon Robust", m_ctrl_params.epsilon_w)
@@ -428,6 +424,7 @@ namespace Control
 
               m_target_es.num_crossings = 0;
               m_target_es.old_psi = 0.0;
+              m_state.old_psi = 0.0;
 
               bind<IMC::TargetState>(this);
           }
@@ -495,8 +492,8 @@ namespace Control
             double tempGain3[4] = {obsv_params.gains[1], 0.0, 0.0, obsv_params.gains[3]};
             Matrix gainMatrix3(tempGain3, 2, 2);
             obsv_params.K2 = gainMatrix3;
-            obsv_params.Komega1 = obsv_params.gains[5];
-            obsv_params.Komega1 = obsv_params.gains[6];
+            obsv_params.Komega1 = obsv_params.gains[4];
+            obsv_params.Komega2 = obsv_params.gains[5];
 
             obsv_state.Pest = temp2DzeroVector;
             obsv_state.Dest = temp2DzeroVector;
@@ -696,8 +693,17 @@ namespace Control
             m_state.lat = state->lat;
             m_state.lon = state->lon;
 
+            // Count the number of crossings
+            bool pos_interval = ( m_state.old_psi >=  Math::c_pi/2 && m_state.old_psi <= Math::c_pi    );
+            bool neg_interval = ( m_state.old_psi >= -Math::c_pi   && m_state.old_psi <= -Math::c_pi/2 );
+            if ( pos_interval && state->psi < 0 )
+                m_state.num_crossings++;
+            if ( neg_interval && state->psi > 0 )
+                m_state.num_crossings--;
+            m_state.old_psi = state->psi;
+            m_state.psi = state->psi + 2*Math::c_pi*m_state.num_crossings;
+
             // Compute vehicle rotation matrix
-            m_state.psi = state->psi;
             double tempRv[4] = {std::cos(m_state.psi), -std::sin(m_state.psi), std::sin(m_state.psi), std::cos(m_state.psi)};
             Matrix tempRvVec(tempRv, 2, 2);
             m_state.Rv = tempRvVec;
@@ -935,7 +941,7 @@ namespace Control
 
             // Path Following controller 1: without saturation in control law
             // m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.MPF_error + transpose(m_state.Rv)*m_ctrl_var.dP_ref - m_ctrl_var.robust);
-            m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.MPF_error + transpose(m_state.Rv)*(m_ctrl_var.dP_ref - obsv_state.Dest) + m_ctrl_params.Sepsilon*obsv_state.Domega_est - m_ctrl_var.robust);
+            m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.MPF_error + transpose(m_state.Rv)*(m_ctrl_var.dP_ref - obsv_state.Dest) - m_ctrl_params.Sepsilon*obsv_state.Domega_est - m_ctrl_var.robust);
 
             // Path Following controller 2: with saturation in terms of tanh
             //m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.SatMPF_error + transpose(m_state.Rv)*m_ctrl_var.dP_ref - m_ctrl_var.robust);
@@ -943,9 +949,6 @@ namespace Control
             // Dispatch control commands
             m_speed_cmd.value = sat(m_ctrl_var.cmd(0,0), m_ctrl_params.min_speed, m_ctrl_params.max_speed);
             m_hrate_cmd.value = sat(m_ctrl_var.cmd(1,0), m_ctrl_params.min_omega, m_ctrl_params.max_omega);
-
-            // m_speed_cmd.value = m_ctrl_var.cmd(0,0);
-            // m_hrate_cmd.value = m_ctrl_var.cmd(1,0);
 
 //            dispatch(m_speed_cmd,Tasks::DF_LOOP_BACK);
             dispatch(m_speed_cmd); dispatch(m_hrate_cmd);
