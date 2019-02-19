@@ -24,7 +24,7 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Matheus F. dos Reis                                              *
+// Author: Matheus F. Reis                                                  *
 //***************************************************************************
 
 // DUNE headers.
@@ -127,6 +127,7 @@ namespace Control
               bool isFollowing;           // True if the controller is trying to follow some external vehicle
               bool useRobust;             // True if the controller is using SM term to compensate disturbances
               bool isObserving;           // True if current observer is being used
+              bool isCompRotDisturb;      // Flag for the compensation of the rotational disturbance
               bool compVel;               // True if target velocity is being compensated
               bool compOmega;             // True if target angular velocity is being compensated
               bool target_flag = 1;       // Flag for recovering the initial received TargetState message
@@ -369,6 +370,12 @@ namespace Control
                       .defaultValue("false")
                       .description("Compensate maritime currents with a constant disturbance observer.");
 
+              param("Compensate rot. disturbance?", m_ctrl_params.isCompRotDisturb)
+                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
+                      .defaultValue("false")
+                      .description("Compensate rotational disturbances acting on the vehicle.");
+
               param("Observer Gains", obsv_params.gains)
                       .size(6)
                       .defaultValue("")
@@ -453,7 +460,13 @@ namespace Control
             double tempEps[2] = {m_ctrl_params.epsilon, 0.0};
             Matrix tempEpsVector(tempEps, 2, 1);
             m_ctrl_params.Eps = tempEpsVector;
-            m_ctrl_params.Sepsilon = temp2DzeroVector;
+            if ( m_ctrl_params.isCompRotDisturb ) {
+                double tempSepsilon[2] = {0.0, -m_ctrl_params.epsilon};
+                Matrix tempSepsilonVec(tempSepsilon, 2, 1);
+                m_ctrl_params.Sepsilon = tempSepsilonVec;
+            }
+            else
+                m_ctrl_params.Sepsilon = temp2DzeroVector;
 
             // Initialize control variables
             m_ctrl_var.Pd = temp2DzeroVector;
@@ -934,9 +947,6 @@ namespace Control
             if ( m_ctrl_params.isObserving ) {
                 updateObserver(&ts);
                 inf("Disturbance = (%f, %f), %f", obsv_state.Dest(0,0), obsv_state.Dest(1,0), obsv_state.Domega_est );
-                double tempSepsilon[2] = {0.0, -m_ctrl_params.epsilon};
-                Matrix tempSepsilonVec(tempSepsilon, 2, 1);
-                m_ctrl_params.Sepsilon = tempSepsilonVec;
             }
 
             // Path Following controller 1: without saturation in control law
