@@ -116,7 +116,7 @@ namespace Control
                     .visibility(Tasks::Parameter::VISIBILITY_USER)
                     .scope(Tasks::Parameter::SCOPE_GLOBAL)
                     .units(Units::Second)
-                    .defaultValue("0")
+                    .defaultValue("1.0")
                     .minimumValue("1.0")
                     .description("Message periodicity for the TargetState Wifi messages.");
 
@@ -227,7 +227,7 @@ namespace Control
                 m_target_state.lat = state.lat;
                 m_target_state.lon = state.lon;
                 dispatch(m_target_state);
-                inf("Dispatching vehicle position = (%f,%f)", m_target_state.x, m_target_state.y);
+                inf("Dispatching vehicle pose = (%f,%f), %f", m_target_state.x, m_target_state.y, m_target_state.psi);
                 m_timer.reset();
             }
 

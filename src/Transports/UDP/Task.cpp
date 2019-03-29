@@ -392,6 +392,7 @@ namespace Transports
           if (itr->isActive())
           {
             if (m_node_table.activate(itr->getId(), itr->getAddress()))
+            //if ( name.rfind("lauv",0) != 0 && m_node_table.activate(itr->getId(), itr->getAddress()))
               inf(DTR("activating transmission to node '%s'"), name.c_str());
           }
           else

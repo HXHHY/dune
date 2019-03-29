@@ -388,7 +388,7 @@ namespace Control
                       .description("Use MPF as path controller.");
 
               param("Target Name", m_target_params.name)
-                      .defaultValue("lauv-noptilus-1")
+                      .defaultValue("lauv-nemo-1")
                       .description("Name of the target vehicle.");
 
               param("Target Timer Param", m_target_params.max_timer)
@@ -762,6 +762,10 @@ namespace Control
         void
         consume(const IMC::TargetState* target_state)
         {
+            // Allow only target_state from the expected target.
+            if (target_state->getSource() != m_target_params.ID)
+                return;
+
             m_timer.reset();
 
             // Compute the initial displacement btw target and vehicle (just once)
@@ -791,6 +795,7 @@ namespace Control
             m_target_es.newCoord.psi = target_state->psi + 2*Math::c_pi*m_target_es.num_crossings;
 
             m_target_params.isNewCoord = 1;
+            inf("New target state received");
         }
 
         //! Set Kalman transition matrix
@@ -906,6 +911,7 @@ namespace Control
                 inf("Target pose = (%f, %f), %f", m_target_es.Pt(0,0), m_target_es.Pt(1,0), m_target_es.psi);
                 inf("Target vels. = (%f, %f), %f", m_target_es.dPt(0,0), m_target_es.dPt(1,0), m_target_es.omega);
                 inf("Norm of target vel. = %f", m_target_es.dPt.norm_2() );
+                inf("Num. crossings = %d", m_target_es.num_crossings);
             }
 
             // Change the desired path in Neptus
@@ -983,11 +989,11 @@ namespace Control
             // Target state
             MPFVar.target_x = m_target_es.Pt(0,0);
             MPFVar.target_y = m_target_es.Pt(1,0);
-            MPFVar.target_z = m_target_state.z;
+            MPFVar.target_z = 0.0;
             MPFVar.target_psi = m_target_es.psi;
             MPFVar.target_vx = m_target_es.dPt(0,0);
             MPFVar.target_vy = m_target_es.dPt(1,0);
-            MPFVar.target_vz = m_target_state.vz;
+            MPFVar.target_vz = 0.0;
             MPFVar.target_omega = m_target_es.omega;
 
             // Vehicle state
