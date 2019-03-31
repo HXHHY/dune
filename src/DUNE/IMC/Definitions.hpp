@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 2a39ad05f1ee6252f29ef5993b719833                            *
+// IMC XML MD5: b076e3580221f2bfbcb8bf5c1a59419e                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -25195,6 +25195,69 @@ namespace DUNE
       getFixedSerializationSize(void) const
       {
         return 180;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Coordination State.
+    class CoordState: public Message
+    {
+    public:
+      //! Path variable gamma.
+      fp32_t gamma;
+      //! System unique ID.
+      int8_t systemid;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 911;
+      }
+
+      CoordState(void);
+
+      CoordState*
+      clone(void) const
+      {
+        return new CoordState(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return CoordState::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "CoordState";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 5;
       }
 
       void

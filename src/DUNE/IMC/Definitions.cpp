@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 2a39ad05f1ee6252f29ef5993b719833                            *
+// IMC XML MD5: b076e3580221f2bfbcb8bf5c1a59419e                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -26909,6 +26909,68 @@ namespace DUNE
       IMC::toJSON(os__, "dest_x", dest_x, nindent__);
       IMC::toJSON(os__, "dest_y", dest_y, nindent__);
       IMC::toJSON(os__, "domega_est", domega_est, nindent__);
+    }
+
+    CoordState::CoordState(void)
+    {
+      m_header.mgid = 911;
+      clear();
+    }
+
+    void
+    CoordState::clear(void)
+    {
+      gamma = 0;
+      systemid = 0;
+    }
+
+    bool
+    CoordState::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::CoordState& other__ = static_cast<const CoordState&>(msg__);
+      if (gamma != other__.gamma) return false;
+      if (systemid != other__.systemid) return false;
+      return true;
+    }
+
+    int
+    CoordState::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    CoordState::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(gamma, ptr__);
+      ptr__ += IMC::serialize(systemid, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    CoordState::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(gamma, bfr__, size__);
+      bfr__ += IMC::deserialize(systemid, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    CoordState::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(gamma, bfr__, size__);
+      bfr__ += IMC::deserialize(systemid, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    CoordState::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "gamma", gamma, nindent__);
+      IMC::toJSON(os__, "systemid", systemid, nindent__);
     }
 
     TotalMagIntensity::TotalMagIntensity(void)

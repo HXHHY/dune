@@ -1,3 +1,4 @@
+
 //***************************************************************************
 // Copyright 2007-2017 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
@@ -75,12 +76,16 @@ namespace Control
           IMC::DesiredHeadingRate m_hrate_cmd;
           //! Target state message to be received by the target vehicle
           IMC::TargetState m_target_state;
+          //! Coordination message to be received by the neighboring vehicles
+          IMC::CoordState m_coord_state;
           //! MPF variables to be recorded
           IMC::MPFVariables MPFVar;
           //! New path control state to visualize the virtual point in Neptus
           IMC::PathControlState path_ctrl_s;
-          //! Time
-          Time::Counter<double> m_timer;
+          //! Time for receiving target messages
+          Time::Counter<double> m_target_timer;
+          //! Time for receiving neighboring messages
+          Time::Counter<double> m_coord_timer;
 
           bool isUsingMPF;                   // Boolean to control the use of the MPF controller
           Matrix a;                          // Continuous state-transition matrix for the Kalman filter
@@ -108,7 +113,7 @@ namespace Control
               fp32_t dt;                     // Control period
               fp64_t epsilon;                // epsilon error
               fp64_t zero_threshold = 0.001; // Internal threshold to consider a scalar as null.
-              fp64_t epsilon_w;              // Threshold for the implementation of the RMPF.
+              fp64_t epsilon_w;              // Threshold for the implementation of the RMPF
 
               double max_speed;           // Maximum speed command to send to AutoPilot
               double min_speed;           // Minimum speed command to send to AutoPilot
@@ -118,10 +123,12 @@ namespace Control
               double k_rot;               // Gain for the turning correction signal
               double dead_zone;           // Dead zone for the hyperbolic tangent on the MPF correction error signal
               //double tau = 0.0001;        // Pole of the linear, first order velocity estimator
-              double rho;                 // Gain for the robust MPF controller.
+              double rho;                 // Gain for the robust MPF controller
+              double periodic_send;       // Time to wait until sending another update of the gamma variable through the coordination channels
 
               std::string pathType;       // Type of path we want to define
               int path_type;              // Integer for the path type
+              int num_coord_vehicles;     // Number of vehicles in coordination
 
               bool clockwise;             // True if the virtual point is in clockwise direction on the path
               bool isFollowing;           // True if the controller is trying to follow some external vehicle
@@ -131,11 +138,12 @@ namespace Control
               bool compVel;               // True if target velocity is being compensated
               bool compOmega;             // True if target angular velocity is being compensated
               bool target_flag = 1;       // Flag for recovering the initial received TargetState message
-              //bool vehicle_flag = 1;      // Flag for recovering the initial received EstimatedState message
           } m_ctrl_params;
 
           //! Important variables for the MPF controller
           struct ControlVariables {
+              std::vector<double> gamma_est; // Vector of estimates of gamma running on the neighboring vehicles
+
               double gamma_ref;           // Along track desired  speed reference (longitudinal velocity)
               double norm_MPF_error;      // Norm of MPF error
 
@@ -153,6 +161,7 @@ namespace Control
               fp64_t gamma;               // Path variable or coordination state
               fp64_t gamma_dot;           // Time derivative of the path variable
               fp64_t g_err;               // MPF error correction signal
+              fp64_t v_consensus;         // Consensus law
               fp64_t rot_term;            // Term to compensate the rotational motion of the virtual point
           } m_ctrl_var;
 
@@ -187,7 +196,8 @@ namespace Control
               Matrix offset;        // Offset vector from the target
               Coord ampl;           // If path is an ellipse, ampl.x, ampl.y are the amplitudes in the respective axes
 
-              double r;             // If path is a circle, r is the radius
+              double r;             // Radius of the circle
+              double phase;         // Phase of the circle
               double lampl;         // Amplitude of the lemniscate path
               double lomega;        // Frequency of the lemniscate path
               double max_ecc;       // Maximum eccentricity between the two axis of the ellipse
@@ -330,6 +340,12 @@ namespace Control
                       .defaultValue("15.0")
                       .description("Radius of the circle");
 
+              param("Circle Phase", m_path_params.phase)
+                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
+                      .defaultValue("0.0")
+                      .description("Phase of the circle");
+
               param("Ellipse x-amplitude", m_path_params.ampl.x)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
@@ -357,6 +373,10 @@ namespace Control
               param("Is it following?", m_ctrl_params.isFollowing)
                       .defaultValue("false")
                       .description("True if the target is stationary (end of the Tracking State).");
+
+              param("Number of coordinated vehicles", m_ctrl_params.num_coord_vehicles)
+                      .defaultValue("2")
+                      .description("Number of coordinated vehicles.");
 
               param("Use robust term?", m_ctrl_params.useRobust)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
@@ -395,6 +415,11 @@ namespace Control
                       .minimumValue("5.0")
                       .defaultValue("10.0")
                       .description("Maximum time to wait for new target data.");
+
+              param("Coord Sample Time", m_ctrl_params.periodic_send)
+                      .minimumValue("1.0")
+                      .defaultValue("1.0")
+                      .description("Sample time to send coordination messages.");
 
               param("Estimate Velocity?", m_ctrl_params.compVel)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
@@ -443,9 +468,13 @@ namespace Control
             PathController::onUpdateParameters();
             inf(DTR("My name is %s, ID %d"), getSystemName(), getSystemId());
 
-            m_timer.reset();
+            m_target_timer.reset();
             if (paramChanged(m_target_params.max_timer))
-                m_timer.setTop(m_target_params.max_timer);
+                m_target_timer.setTop(m_target_params.max_timer);
+
+            m_coord_timer.reset();
+            if (paramChanged(m_ctrl_params.periodic_send))
+                m_target_timer.setTop(m_ctrl_params.periodic_send);
 
             double temp2Dzeros[2] = {0.0, 0.0};
             Matrix temp2DzeroVector(temp2Dzeros,2,1);
@@ -476,6 +505,10 @@ namespace Control
             double tempTerm[2] = {m_ctrl_params.k_rot, 0};
             Matrix tempTermVec(tempTerm, 2, 1);
             m_ctrl_var.Term = tempTermVec;
+
+            // Initialize the estimates of the gamma variables
+            for ( int i = 0; i < m_ctrl_params.num_coord_vehicles; i = i + 1 )
+                m_ctrl_var.gamma_est[i] = 0.0;
 
             // Initialize the choosen path type
             if (m_ctrl_params.pathType == "circle") {
@@ -649,10 +682,10 @@ namespace Control
             switch ( m_ctrl_params.path_type ) {
             // case is circle
             case 1:
-                Pdx = m_path_params.r*std::cos(m_ctrl_var.gamma/m_path_params.r);
-                Pdy = m_path_params.r*std::sin(m_ctrl_var.gamma/m_path_params.r);
-                grad_Pdx = -std::sin(m_ctrl_var.gamma/m_path_params.r);
-                grad_Pdy = std::cos(m_ctrl_var.gamma/m_path_params.r);
+                Pdx = m_path_params.r*std::cos(m_ctrl_var.gamma/m_path_params.r + m_path_params.phase);
+                Pdy = m_path_params.r*std::sin(m_ctrl_var.gamma/m_path_params.r + m_path_params.phase);
+                grad_Pdx = -std::sin(m_ctrl_var.gamma/m_path_params.r + m_path_params.phase);
+                grad_Pdy = std::cos(m_ctrl_var.gamma/m_path_params.r + m_path_params.phase);
                 break;
             // case is ellipse
             case 2:
@@ -731,13 +764,32 @@ namespace Control
 
         }
 
+        //! Compute the consensus term for coordination.
+        void
+        computeConsensus()
+        {
+            fp64_t sum = 0;
+            for( int i = 0; i < m_ctrl_params.num_coord_vehicles; i = i + 1 ) {
+                sum = sum + (m_ctrl_var.gamma - m_ctrl_var.gamma_est[i]);
+            }
+            m_ctrl_var.v_consensus = -m_ctrl_params.k_consensus*sum;
+        }
+
         //! Updates the state of the path variable gamma.
         void
         updatePathVariables(const TrackingState* ts)
         {
             // Integrate gamma using Euler's method (ode1)
-            m_ctrl_var.gamma_dot = m_ctrl_var.gamma_ref + m_ctrl_var.g_err;
+            m_ctrl_var.gamma_dot = m_ctrl_var.gamma_ref + m_ctrl_var.g_err + m_ctrl_var.v_consensus;
             m_ctrl_var.gamma = m_ctrl_var.gamma + ts->delta*m_ctrl_var.gamma_dot;
+
+            // Send new coordination data through the channel
+            if ( m_coord_timer.overflow()) {
+                m_coord_state.systemid = getSystemId();
+                m_coord_state.gamma = m_ctrl_var.gamma;
+                dispatch(m_ctrl_var.gamma);
+                m_coord_timer.reset();
+            }
 
             // Logs
             inf("Gamma = %f", m_ctrl_var.gamma);
@@ -758,6 +810,15 @@ namespace Control
             m_ctrl_var.robust = (m_ctrl_params.rho/den)*m_ctrl_var.MPF_error;
         }
 
+        //! Consumer for a CooperativeState message
+        void
+        consume(const IMC::CoordState* coord_state)
+        {
+            if (coord_state->systemID == getSystemId())
+                return;
+
+        }
+
         //! Consumer for a TargetState message
         void
         consume(const IMC::TargetState* target_state)
@@ -766,7 +827,7 @@ namespace Control
             if (target_state->getSource() != m_target_params.ID)
                 return;
 
-            m_timer.reset();
+            m_target_timer.reset();
 
             // Compute the initial displacement btw target and vehicle (just once)
             if ( m_ctrl_params.target_flag && m_state.lat != 0 ) {
@@ -833,7 +894,7 @@ namespace Control
         computeTargetState(const TrackingState* ts)
         {
             // Forces target velocity to be zero, if no new data has been seen
-            if ( m_timer.overflow() ) {
+            if ( m_target_timer.overflow() ) {
                 target_kalman.setState(STATE_VX, 0.0);
                 target_kalman.setState(STATE_VY, 0.0);
                 target_kalman.setState(STATE_OMEGA, 0.0);
