@@ -30,6 +30,7 @@
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
+#include <array>
 
 namespace Control
 {
@@ -62,6 +63,12 @@ namespace Control
               NUM_OUTPUTS  = 3,
           };
 
+          struct CommVehicles {
+              uint8_t ID;
+              fp32_t gamma_est;
+              fp32_t gamma_error;
+          };
+
           //! Kalman Filter matrices.
           Navigation::KalmanFilter target_kalman;
           //! Kalman Filter process noise covariance matrix parameters.
@@ -70,6 +77,8 @@ namespace Control
           std::vector<double> target_measure_noise;
           //! Kalman Filter state covariance matrix parameters.
           std::vector<double> target_state_cov;
+          //! Array of connected vehicles (variable size)
+          std::vector<CommVehicles> connected_vehicles;
           //! Desired speed command
           IMC::DesiredSpeed m_speed_cmd;
           //! Desired heading rate command
@@ -121,6 +130,7 @@ namespace Control
               double min_omega;           // Minimum angular velocity command to send to AutoPilot
               double k_eta;               // Gain for MPF correction error signal
               double k_rot;               // Gain for the turning correction signal
+              double k_consensus;         // Consensus gain
               double dead_zone;           // Dead zone for the hyperbolic tangent on the MPF correction error signal
               //double tau = 0.0001;        // Pole of the linear, first order velocity estimator
               double rho;                 // Gain for the robust MPF controller
@@ -128,7 +138,7 @@ namespace Control
 
               std::string pathType;       // Type of path we want to define
               int path_type;              // Integer for the path type
-              int num_coord_vehicles;     // Number of vehicles in coordination
+              //int num_coord_vehicles;     // Number of vehicles in coordination
 
               bool clockwise;             // True if the virtual point is in clockwise direction on the path
               bool isFollowing;           // True if the controller is trying to follow some external vehicle
@@ -142,8 +152,6 @@ namespace Control
 
           //! Important variables for the MPF controller
           struct ControlVariables {
-              std::vector<double> gamma_est; // Vector of estimates of gamma running on the neighboring vehicles
-
               double gamma_ref;           // Along track desired  speed reference (longitudinal velocity)
               double norm_MPF_error;      // Norm of MPF error
 
@@ -158,11 +166,11 @@ namespace Control
               Matrix cross_prod;          // Cross product between vehicle velocity and desired path
               Matrix Term;                // Additional term
 
-              fp64_t gamma;               // Path variable or coordination state
-              fp64_t gamma_dot;           // Time derivative of the path variable
-              fp64_t g_err;               // MPF error correction signal
-              fp64_t v_consensus;         // Consensus law
-              fp64_t rot_term;            // Term to compensate the rotational motion of the virtual point
+              fp64_t gamma;                     // Path variable or coordination state
+              fp64_t gamma_dot;                 // Time derivative of the path variable
+              fp64_t g_err;                     // MPF error correction signal
+              fp64_t v_consensus;               // Consensus law
+              fp64_t v_rot;                     // Term to compensate the rotational motion of the virtual point
           } m_ctrl_var;
 
           //! Structure for the observer gains
@@ -276,8 +284,15 @@ namespace Control
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
                       .minimumValue("0.0")
-                      .defaultValue("0.0")
+                      .defaultValue("3")
                       .description("Controller gain for the rotation correction signal.");
+
+              param("Consensus Gain", m_ctrl_params.k_consensus)
+                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
+                      .minimumValue("0.0")
+                      .defaultValue("0.1")
+                      .description("Consensus gain for cooperative control.");
 
               param("Dead zone", m_ctrl_params.dead_zone)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
@@ -319,7 +334,7 @@ namespace Control
               param("Offset x", m_ctrl_params.offset.x)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
-                      .defaultValue("-20.0")
+                      .defaultValue("0.0")
                       .description("Fixed offset for the path in the longitudinal direction.");
 
               param("Offset y", m_ctrl_params.offset.y)
@@ -374,10 +389,6 @@ namespace Control
                       .defaultValue("false")
                       .description("True if the target is stationary (end of the Tracking State).");
 
-              param("Number of coordinated vehicles", m_ctrl_params.num_coord_vehicles)
-                      .defaultValue("2")
-                      .description("Number of coordinated vehicles.");
-
               param("Use robust term?", m_ctrl_params.useRobust)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
@@ -416,8 +427,10 @@ namespace Control
                       .defaultValue("10.0")
                       .description("Maximum time to wait for new target data.");
 
-              param("Coord Sample Time", m_ctrl_params.periodic_send)
-                      .minimumValue("1.0")
+              param("Coordenation Sample Time", m_ctrl_params.periodic_send)
+                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
+                      .minimumValue("0.0")
                       .defaultValue("1.0")
                       .description("Sample time to send coordination messages.");
 
@@ -445,9 +458,9 @@ namespace Control
                       .description("Kalman Filter State Covariance initial values");
 
               param("Measure Noise Covariance", target_measure_noise)
-                      .defaultValue("")
-                      .size(2)
-                      .description("Kalman Filter measurement noise covariance values");
+                    .defaultValue("")
+                    .size(2)
+                    .description("Kalman Filter measurement noise covariance values");
 
               param("Process Noise Covariance", target_process_noise)
                       .defaultValue("")
@@ -459,6 +472,7 @@ namespace Control
               m_state.old_psi = 0.0;
 
               bind<IMC::TargetState>(this);
+              bind<IMC::CoordState>(this);
           }
 
         //! Update internal state with new parameter values.
@@ -466,7 +480,8 @@ namespace Control
         onUpdateParameters(void)
         {   
             PathController::onUpdateParameters();
-            inf(DTR("My name is %s, ID %d"), getSystemName(), getSystemId());
+            int current_system_ID = getSystemId();
+            inf(DTR("My name is %s, ID %d"), getSystemName(), current_system_ID);
 
             m_target_timer.reset();
             if (paramChanged(m_target_params.max_timer))
@@ -474,7 +489,7 @@ namespace Control
 
             m_coord_timer.reset();
             if (paramChanged(m_ctrl_params.periodic_send))
-                m_target_timer.setTop(m_ctrl_params.periodic_send);
+                m_coord_timer.setTop(m_ctrl_params.periodic_send);
 
             double temp2Dzeros[2] = {0.0, 0.0};
             Matrix temp2DzeroVector(temp2Dzeros,2,1);
@@ -502,13 +517,9 @@ namespace Control
             m_ctrl_var.grad_Pd = temp2DzeroVector;
             m_ctrl_var.cmd = temp2DzeroVector;
             m_ctrl_var.robust = temp2DzeroVector;
-            double tempTerm[2] = {m_ctrl_params.k_rot, 0};
-            Matrix tempTermVec(tempTerm, 2, 1);
-            m_ctrl_var.Term = tempTermVec;
-
-            // Initialize the estimates of the gamma variables
-            for ( int i = 0; i < m_ctrl_params.num_coord_vehicles; i = i + 1 )
-                m_ctrl_var.gamma_est[i] = 0.0;
+//            double tempTerm[2] = {m_ctrl_params.k_rot, 0};
+//            Matrix tempTermVec(tempTerm, 2, 1);
+//            m_ctrl_var.Term = tempTermVec;
 
             // Initialize the choosen path type
             if (m_ctrl_params.pathType == "circle") {
@@ -576,6 +587,10 @@ namespace Control
                 disableControlLoops(IMC::CL_YAW_RATE);
                 enableControlLoops(IMC::CL_YAW);
             }
+
+            // Reset gamma here according to the objective quadrant.
+            m_ctrl_var.gamma = 0.0;
+            m_ctrl_var.gamma_dot = 0.0;
         }
 
         //! Activates at the beginning of the path.
@@ -682,20 +697,35 @@ namespace Control
             switch ( m_ctrl_params.path_type ) {
             // case is circle
             case 1:
-                Pdx = m_path_params.r*std::cos(m_ctrl_var.gamma/m_path_params.r + m_path_params.phase);
-                Pdy = m_path_params.r*std::sin(m_ctrl_var.gamma/m_path_params.r + m_path_params.phase);
-                grad_Pdx = -std::sin(m_ctrl_var.gamma/m_path_params.r + m_path_params.phase);
-                grad_Pdy = std::cos(m_ctrl_var.gamma/m_path_params.r + m_path_params.phase);
+            {
+                double circle_term = m_ctrl_var.gamma/m_path_params.r + Math::Angles::radians(m_path_params.phase);
+                Pdx = m_path_params.r*std::cos(circle_term);
+                Pdy = m_path_params.r*std::sin(circle_term);
+                grad_Pdx = -std::sin(circle_term);
+                grad_Pdy = std::cos(circle_term);
+
+//                // Reset gamma if needed
+//                if (circle_term >= 2*Math::c_pi || circle_term <= -2*Math::c_pi)
+//                    m_ctrl_var.gamma = -m_path_params.r*Math::Angles::radians(m_path_params.phase);
                 break;
+            }
             // case is ellipse
             case 2:
-                Pdx = m_path_params.ampl.x*std::cos(m_ctrl_var.gamma/m_path_params.max_ecc);
-                Pdy = m_path_params.ampl.y*std::sin(m_ctrl_var.gamma/m_path_params.max_ecc);
-                grad_Pdx = -(m_path_params.ampl.x/m_path_params.max_ecc)*std::sin(m_ctrl_var.gamma/m_path_params.max_ecc);
-                grad_Pdy = (m_path_params.ampl.y/m_path_params.max_ecc)*std::cos(m_ctrl_var.gamma/m_path_params.max_ecc);
+            {
+                double ellipse_term = m_ctrl_var.gamma/m_path_params.max_ecc;
+                Pdx = m_path_params.ampl.x*std::cos(ellipse_term);
+                Pdy = m_path_params.ampl.y*std::sin(ellipse_term);
+                grad_Pdx = -(m_path_params.ampl.x/m_path_params.max_ecc)*std::sin(ellipse_term);
+                grad_Pdy = (m_path_params.ampl.y/m_path_params.max_ecc)*std::cos(ellipse_term);
+
+//                // Reset gamma if needed
+//                if (ellipse_term >= 2*Math::c_pi || ellipse_term <= -2*Math::c_pi)
+//                    m_ctrl_var.gamma = 0.0;
                 break;
+            }
             // case is a lemniscate
             case 3:
+            {
                 double den;
                 m_path_params.lomega = 1/m_path_params.lampl;
                 den = pow(std::sin(m_path_params.lomega*m_ctrl_var.gamma),2) + 1;
@@ -712,6 +742,7 @@ namespace Control
                     grad_Pdy = m_path_params.lampl*m_path_params.lomega*(std::cos(2*m_path_params.lomega*m_ctrl_var.gamma) - pow(std::sin(m_path_params.lomega*m_ctrl_var.gamma),2))/pow(den,2);
                 }
                 break;
+            }
             // otherwise, just follow ("path" is the target location)
             default:
                 Pdx = 0; Pdy = 0;
@@ -761,18 +792,6 @@ namespace Control
 
             inf("Vehicle pose = (%f, %f), %f", m_state.Pv(0,0), m_state.Pv(1,0), m_state.psi);
             inf("Vehicle vel. = (%f, %f)", m_state.dPv(0,0), m_state.dPv(1,0) );
-
-        }
-
-        //! Compute the consensus term for coordination.
-        void
-        computeConsensus()
-        {
-            fp64_t sum = 0;
-            for( int i = 0; i < m_ctrl_params.num_coord_vehicles; i = i + 1 ) {
-                sum = sum + (m_ctrl_var.gamma - m_ctrl_var.gamma_est[i]);
-            }
-            m_ctrl_var.v_consensus = -m_ctrl_params.k_consensus*sum;
         }
 
         //! Updates the state of the path variable gamma.
@@ -780,19 +799,20 @@ namespace Control
         updatePathVariables(const TrackingState* ts)
         {
             // Integrate gamma using Euler's method (ode1)
-            m_ctrl_var.gamma_dot = m_ctrl_var.gamma_ref + m_ctrl_var.g_err + m_ctrl_var.v_consensus;
+            m_ctrl_var.gamma_dot = m_ctrl_var.gamma_ref + m_ctrl_var.g_err + m_ctrl_var.v_consensus + m_ctrl_var.v_rot;
             m_ctrl_var.gamma = m_ctrl_var.gamma + ts->delta*m_ctrl_var.gamma_dot;
 
             // Send new coordination data through the channel
-            if ( m_coord_timer.overflow()) {
+            if (m_coord_timer.overflow()) {
                 m_coord_state.systemid = getSystemId();
                 m_coord_state.gamma = m_ctrl_var.gamma;
-                dispatch(m_ctrl_var.gamma);
+                dispatch(m_coord_state);
                 m_coord_timer.reset();
             }
 
             // Logs
             inf("Gamma = %f", m_ctrl_var.gamma);
+            inf("Rot compensation = %f", m_ctrl_var.v_rot);
         }
 
         //! Computes the robustness term
@@ -810,13 +830,53 @@ namespace Control
             m_ctrl_var.robust = (m_ctrl_params.rho/den)*m_ctrl_var.MPF_error;
         }
 
+        //! Compute the consensus term for coordination btw vehicles.
+        void
+        computeConsensus(const TrackingState* ts)
+        {
+            // Update gamma estimations and compute the sum for consensus
+            fp64_t sum = 0;
+            for( int i = 0; i < connected_vehicles.size(); i=i+1 ) {
+                double f_gamma = 0.0; // ZOH
+                connected_vehicles[i].gamma_est = connected_vehicles[i].gamma_est + (ts->delta)*f_gamma;
+                connected_vehicles[i].gamma_error = (m_ctrl_var.gamma - connected_vehicles[i].gamma_est);
+                sum = sum + connected_vehicles[i].gamma_error;
+
+                inf("Gamma errors = %f", connected_vehicles[i].gamma_error);
+            }
+
+            m_ctrl_var.v_consensus = -m_ctrl_params.k_consensus*sum;
+        }
+
         //! Consumer for a CooperativeState message
         void
         consume(const IMC::CoordState* coord_state)
         {
-            if (coord_state->systemID == getSystemId())
+            if (coord_state->systemid == getSystemId())
                 return;
 
+            // Resets the estimated gamma for the respective vehicle
+            bool new_vehicle_arrived = 1;
+            int num_conn_vehicles = connected_vehicles.size();
+            for( int i = 0; i < num_conn_vehicles; i=i+1 ) {
+                if ( coord_state->systemid == connected_vehicles[i].ID ) {
+                    connected_vehicles[i].gamma_est = coord_state->gamma;
+                    new_vehicle_arrived = 0;
+                    break;
+                }
+            }
+            // If message from a new vehicle arrived, create new vehicle and add to vector 'connected_vehicles'
+            if (new_vehicle_arrived) {
+                CommVehicles new_vehicle;
+                new_vehicle.ID = coord_state->systemid;
+                new_vehicle.gamma_est = coord_state->gamma;
+                new_vehicle.gamma_error = (m_ctrl_var.gamma - coord_state->gamma);
+
+                connected_vehicles.push_back(new_vehicle);
+            }
+
+            inf("New coord. message arrived from %d", coord_state->systemid);
+            inf("Size of vehicle array is %d", connected_vehicles.size());
         }
 
         //! Consumer for a TargetState message
@@ -856,7 +916,7 @@ namespace Control
             m_target_es.newCoord.psi = target_state->psi + 2*Math::c_pi*m_target_es.num_crossings;
 
             m_target_params.isNewCoord = 1;
-            inf("New target state received");
+            //inf("New target state received");
         }
 
         //! Set Kalman transition matrix
@@ -950,6 +1010,9 @@ namespace Control
             if ( !isUsingMPF )
                 return;
 
+            // Update gamma estimators for neighboring vehicles
+            computeConsensus(&ts);
+
             // Update the path variables
             updatePathVariables(&ts);
 
@@ -970,9 +1033,8 @@ namespace Control
 
             if ( getSystemId() != m_target_params.ID ) {
                 inf("Target pose = (%f, %f), %f", m_target_es.Pt(0,0), m_target_es.Pt(1,0), m_target_es.psi);
-                inf("Target vels. = (%f, %f), %f", m_target_es.dPt(0,0), m_target_es.dPt(1,0), m_target_es.omega);
+                //inf("Target vels. = (%f, %f), %f", m_target_es.dPt(0,0), m_target_es.dPt(1,0), m_target_es.omega);
                 inf("Norm of target vel. = %f", m_target_es.dPt.norm_2() );
-                inf("Num. crossings = %d", m_target_es.num_crossings);
             }
 
             // Change the desired path in Neptus
@@ -991,27 +1053,35 @@ namespace Control
             m_ctrl_var.MPF_error = transpose(m_state.Rv)*m_ctrl_var.World_error + m_ctrl_params.Eps;
             inf("MPF error norm = %f", m_ctrl_var.MPF_error.norm_2());
 
-            // Update the MPF error correction signal g_err
-            double eta;
+            double eta, v_term_den;
             double norm_gradPd = m_ctrl_var.grad_Pd.norm_2();
             if ( norm_gradPd > m_ctrl_params.zero_threshold ) {
-//                Matrix etaM = -transpose(m_ctrl_var.MPF_error - m_ctrl_params.Eps - m_ctrl_var.Term)*transpose(m_state.Rv)*m_target_es.Rt*(m_ctrl_var.grad_Pd/norm_gradPd);
-                Matrix etaM = -transpose(m_ctrl_var.MPF_error - m_ctrl_var.Term)*transpose(m_state.Rv)*m_target_es.Rt*(m_ctrl_var.grad_Pd/norm_gradPd);
+                // Matrix etaM = -transpose(m_ctrl_var.MPF_error - m_ctrl_params.Eps - m_ctrl_var.Term)*transpose(m_state.Rv)*m_target_es.Rt*(m_ctrl_var.grad_Pd/norm_gradPd);
+                // Matrix etaM = -transpose(m_ctrl_var.MPF_error - m_ctrl_var.Term)*transpose(m_state.Rv)*m_target_es.Rt*(m_ctrl_var.grad_Pd/norm_gradPd);
+                Matrix etaM = -transpose(m_ctrl_var.MPF_error)*transpose(m_state.Rv)*m_target_es.Rt*(m_ctrl_var.grad_Pd/norm_gradPd);
                 eta = etaM(0,0);
+                v_term_den = norm_gradPd;
             }
-            else
+            else {
                 eta = 0;
+                v_term_den = m_ctrl_params.zero_threshold;
+            }
 
+            // Update the MPF error correction signal g_err
             m_ctrl_var.g_err = -m_ctrl_params.k_eta*m_ctrl_var.gamma_ref*(tanh(eta+m_ctrl_params.dead_zone) + tanh(eta-m_ctrl_params.dead_zone));
 
+            // Term to compensate rotational motion of the target
+            Matrix v_term = transpose(m_ctrl_var.grad_Pd)*m_ctrl_var.cross_prod;
+            m_ctrl_var.v_rot = -m_ctrl_params.k_rot*v_term(0,0)/pow(v_term_den,2);
+
             // Compute the robustness term
-            if ( m_ctrl_params.useRobust ) {
+            if (m_ctrl_params.useRobust) {
                 computeRobust();
                 inf("Robust term = (%f, %f)", m_ctrl_var.robust(0,0), m_ctrl_var.robust(1,0) );
             }
 
             // Update observer state
-            if ( m_ctrl_params.isObserving ) {
+            if (m_ctrl_params.isObserving) {
                 updateObserver(&ts);
                 inf("Disturbance = (%f, %f), %f", obsv_state.Dest(0,0), obsv_state.Dest(1,0), obsv_state.Domega_est );
             }
@@ -1043,7 +1113,7 @@ namespace Control
 
             // Path variables
             MPFVar.gamma = m_ctrl_var.gamma;
-            MPFVar.gamma_dot =   m_ctrl_var.gamma_dot;
+            MPFVar.gamma_dot = m_ctrl_var.gamma_dot;
             MPFVar.gamma_ref = m_ctrl_var.gamma_ref;
             MPFVar.g_err = m_ctrl_var.g_err;
 
