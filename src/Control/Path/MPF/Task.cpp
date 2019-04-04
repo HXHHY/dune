@@ -284,7 +284,7 @@ namespace Control
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
                       .minimumValue("0.0")
-                      .defaultValue("3")
+                      .defaultValue("1")
                       .description("Controller gain for the rotation correction signal.");
 
               param("Consensus Gain", m_ctrl_params.k_consensus)
@@ -812,7 +812,7 @@ namespace Control
 
             // Logs
             inf("Gamma = %f", m_ctrl_var.gamma);
-            inf("Rot compensation = %f", m_ctrl_var.v_rot);
+            inf("Rot. compensation = %f", m_ctrl_var.v_rot);
         }
 
         //! Computes the robustness term
@@ -1072,7 +1072,12 @@ namespace Control
 
             // Term to compensate rotational motion of the target
             Matrix v_term = transpose(m_ctrl_var.grad_Pd)*m_ctrl_var.cross_prod;
-            m_ctrl_var.v_rot = -m_ctrl_params.k_rot*v_term(0,0)/pow(v_term_den,2);
+            m_ctrl_var.v_rot = -m_ctrl_params.k_rot*v_term(0)/pow(v_term_den,2);
+
+//            Matrix dot_prod = transpose(m_ctrl_var.grad_Pd)*m_ctrl_var.Pd;
+//            Matrix null_term = (dot_prod(0)/pow(v_term_den,2))*m_target_es.SO2*m_ctrl_var.grad_Pd;;
+//            inf("Dot product = %f", dot_prod(0) );
+//            inf("Cancel. of the rot. term = (%f, %f)", null_term(0), null_term(1));
 
             // Compute the robustness term
             if (m_ctrl_params.useRobust) {
@@ -1092,6 +1097,19 @@ namespace Control
 
             // Path Following controller 2: with saturation in terms of tanh
             //m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.SatMPF_error + transpose(m_state.Rv)*m_ctrl_var.dP_ref - m_ctrl_var.robust);
+
+            // If vehicle gets stuck, override the previous control...
+            if (m_ctrl_var.cmd(0) <= 0) {
+                Matrix localWorldError = m_ctrl_var.MPF_error - m_ctrl_params.Eps;
+                double omega_aux;
+                if (localWorldError(1) > 0)
+                    omega_aux = m_ctrl_params.min_omega;
+                else
+                    omega_aux = m_ctrl_params.max_omega;
+                double temp_command[2] = {m_ctrl_params.max_speed, omega_aux};
+                Matrix u_aux(temp_command, 2, 1);
+                m_ctrl_var.cmd = u_aux;
+            }
 
             // Dispatch control commands
             m_speed_cmd.value = sat(m_ctrl_var.cmd(0,0), m_ctrl_params.min_speed, m_ctrl_params.max_speed);
