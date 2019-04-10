@@ -129,7 +129,6 @@ namespace Control
               double max_omega;           // Maximum angular velocity command to send to AutoPilot
               double min_omega;           // Minimum angular velocity command to send to AutoPilot
               double k_eta;               // Gain for MPF correction error signal
-              double k_rot;               // Gain for the turning correction signal
               double k_consensus;         // Consensus gain
               double dead_zone;           // Dead zone for the hyperbolic tangent on the MPF correction error signal
               //double tau = 0.0001;        // Pole of the linear, first order velocity estimator
@@ -148,6 +147,7 @@ namespace Control
               bool compVel;               // True if target velocity is being compensated
               bool compOmega;             // True if target angular velocity is being compensated
               bool target_flag = 1;       // Flag for recovering the initial received TargetState message
+              bool override_ctrller;      // Flag to override MPF controller when target is outside the vehicle LOS
           } m_ctrl_params;
 
           //! Important variables for the MPF controller
@@ -262,6 +262,12 @@ namespace Control
           Task(const std::string& name, Tasks::Context& ctx):
               DUNE::Control::PathController(name, ctx)
           {
+              param("Override controller", m_ctrl_params.override_ctrller)
+                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
+                      .defaultValue("false")
+                      .description("True if override controller is active.");
+
               param("Kx Gain", m_ctrl_params.k_gain.x)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
@@ -279,13 +285,6 @@ namespace Control
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
                       .defaultValue("2.0")
                       .description("Controller gain for the MPF error correction signal.");
-
-              param("K_rot Gain", m_ctrl_params.k_rot)
-                      .visibility(Tasks::Parameter::VISIBILITY_USER)
-                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
-                      .minimumValue("0.0")
-                      .defaultValue("1")
-                      .description("Controller gain for the rotation correction signal.");
 
               param("Consensus Gain", m_ctrl_params.k_consensus)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
@@ -517,9 +516,6 @@ namespace Control
             m_ctrl_var.grad_Pd = temp2DzeroVector;
             m_ctrl_var.cmd = temp2DzeroVector;
             m_ctrl_var.robust = temp2DzeroVector;
-//            double tempTerm[2] = {m_ctrl_params.k_rot, 0};
-//            Matrix tempTermVec(tempTerm, 2, 1);
-//            m_ctrl_var.Term = tempTermVec;
 
             // Initialize the choosen path type
             if (m_ctrl_params.pathType == "circle") {
@@ -1072,7 +1068,7 @@ namespace Control
 
             // Term to compensate rotational motion of the target
             Matrix v_term = transpose(m_ctrl_var.grad_Pd)*m_ctrl_var.cross_prod;
-            m_ctrl_var.v_rot = -m_ctrl_params.k_rot*v_term(0)/pow(v_term_den,2);
+            m_ctrl_var.v_rot = -v_term(0)/pow(v_term_den,2);
 
 //            Matrix dot_prod = transpose(m_ctrl_var.grad_Pd)*m_ctrl_var.Pd;
 //            Matrix null_term = (dot_prod(0)/pow(v_term_den,2))*m_target_es.SO2*m_ctrl_var.grad_Pd;;
@@ -1099,7 +1095,7 @@ namespace Control
             //m_ctrl_var.cmd = m_ctrl_params.delta_inv*(-m_ctrl_params.Kp*m_ctrl_var.SatMPF_error + transpose(m_state.Rv)*m_ctrl_var.dP_ref - m_ctrl_var.robust);
 
             // If vehicle gets stuck, override the previous control...
-            if (m_ctrl_var.cmd(0) <= 0) {
+            if (m_ctrl_var.cmd(0) <= 0 && m_ctrl_params.override_ctrller) {
                 Matrix localWorldError = m_ctrl_var.MPF_error - m_ctrl_params.Eps;
                 double omega_aux;
                 if (localWorldError(1) > 0)

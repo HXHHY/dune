@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 8bd184c2c418b3f9404fc57509737788                            *
+// IMC XML MD5: 308226469d065ee385084a0ce5c35397                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -25207,7 +25207,7 @@ namespace DUNE
     public:
       //! Path variable gamma.
       fp32_t gamma;
-      //! System unique ID.
+      //! Vehicle ID.
       uint8_t systemid;
 
       static uint16_t
