@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 308226469d065ee385084a0ce5c35397                            *
+// IMC XML MD5: 7a3ed426d58582705930c36d3be90198                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -26600,6 +26600,7 @@ namespace DUNE
     void
     MPFVariables::clear(void)
     {
+      override = 0;
       ctrl_cmd_v = 0;
       ctrl_cmd_omega = 0;
       sat_ctrl_cmd_v = 0;
@@ -26610,6 +26611,8 @@ namespace DUNE
       gamma_dot = 0;
       gamma_ref = 0;
       g_err = 0;
+      v_consensus = 0;
+      v_rot = 0;
       target_x = 0;
       target_y = 0;
       target_z = 0;
@@ -26651,6 +26654,7 @@ namespace DUNE
     MPFVariables::fieldsEqual(const Message& msg__) const
     {
       const IMC::MPFVariables& other__ = static_cast<const MPFVariables&>(msg__);
+      if (override != other__.override) return false;
       if (ctrl_cmd_v != other__.ctrl_cmd_v) return false;
       if (ctrl_cmd_omega != other__.ctrl_cmd_omega) return false;
       if (sat_ctrl_cmd_v != other__.sat_ctrl_cmd_v) return false;
@@ -26661,6 +26665,8 @@ namespace DUNE
       if (gamma_dot != other__.gamma_dot) return false;
       if (gamma_ref != other__.gamma_ref) return false;
       if (g_err != other__.g_err) return false;
+      if (v_consensus != other__.v_consensus) return false;
+      if (v_rot != other__.v_rot) return false;
       if (target_x != other__.target_x) return false;
       if (target_y != other__.target_y) return false;
       if (target_z != other__.target_z) return false;
@@ -26709,6 +26715,7 @@ namespace DUNE
     MPFVariables::serializeFields(uint8_t* bfr__) const
     {
       uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(override, ptr__);
       ptr__ += IMC::serialize(ctrl_cmd_v, ptr__);
       ptr__ += IMC::serialize(ctrl_cmd_omega, ptr__);
       ptr__ += IMC::serialize(sat_ctrl_cmd_v, ptr__);
@@ -26719,6 +26726,8 @@ namespace DUNE
       ptr__ += IMC::serialize(gamma_dot, ptr__);
       ptr__ += IMC::serialize(gamma_ref, ptr__);
       ptr__ += IMC::serialize(g_err, ptr__);
+      ptr__ += IMC::serialize(v_consensus, ptr__);
+      ptr__ += IMC::serialize(v_rot, ptr__);
       ptr__ += IMC::serialize(target_x, ptr__);
       ptr__ += IMC::serialize(target_y, ptr__);
       ptr__ += IMC::serialize(target_z, ptr__);
@@ -26761,6 +26770,7 @@ namespace DUNE
     MPFVariables::deserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(override, bfr__, size__);
       bfr__ += IMC::deserialize(ctrl_cmd_v, bfr__, size__);
       bfr__ += IMC::deserialize(ctrl_cmd_omega, bfr__, size__);
       bfr__ += IMC::deserialize(sat_ctrl_cmd_v, bfr__, size__);
@@ -26771,6 +26781,8 @@ namespace DUNE
       bfr__ += IMC::deserialize(gamma_dot, bfr__, size__);
       bfr__ += IMC::deserialize(gamma_ref, bfr__, size__);
       bfr__ += IMC::deserialize(g_err, bfr__, size__);
+      bfr__ += IMC::deserialize(v_consensus, bfr__, size__);
+      bfr__ += IMC::deserialize(v_rot, bfr__, size__);
       bfr__ += IMC::deserialize(target_x, bfr__, size__);
       bfr__ += IMC::deserialize(target_y, bfr__, size__);
       bfr__ += IMC::deserialize(target_z, bfr__, size__);
@@ -26813,6 +26825,7 @@ namespace DUNE
     MPFVariables::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(override, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(ctrl_cmd_v, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(ctrl_cmd_omega, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(sat_ctrl_cmd_v, bfr__, size__);
@@ -26823,6 +26836,8 @@ namespace DUNE
       bfr__ += IMC::reverseDeserialize(gamma_dot, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(gamma_ref, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(g_err, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(v_consensus, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(v_rot, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(target_x, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(target_y, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(target_z, bfr__, size__);
@@ -26864,6 +26879,7 @@ namespace DUNE
     void
     MPFVariables::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
     {
+      IMC::toJSON(os__, "override", override, nindent__);
       IMC::toJSON(os__, "ctrl_cmd_v", ctrl_cmd_v, nindent__);
       IMC::toJSON(os__, "ctrl_cmd_omega", ctrl_cmd_omega, nindent__);
       IMC::toJSON(os__, "sat_ctrl_cmd_v", sat_ctrl_cmd_v, nindent__);
@@ -26874,6 +26890,8 @@ namespace DUNE
       IMC::toJSON(os__, "gamma_dot", gamma_dot, nindent__);
       IMC::toJSON(os__, "gamma_ref", gamma_ref, nindent__);
       IMC::toJSON(os__, "g_err", g_err, nindent__);
+      IMC::toJSON(os__, "v_consensus", v_consensus, nindent__);
+      IMC::toJSON(os__, "v_rot", v_rot, nindent__);
       IMC::toJSON(os__, "target_x", target_x, nindent__);
       IMC::toJSON(os__, "target_y", target_y, nindent__);
       IMC::toJSON(os__, "target_z", target_z, nindent__);

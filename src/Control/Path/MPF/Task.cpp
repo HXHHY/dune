@@ -808,7 +808,7 @@ namespace Control
 
             // Logs
             inf("Gamma = %f", m_ctrl_var.gamma);
-            inf("Rot. compensation = %f", m_ctrl_var.v_rot);
+            // inf("Rot. compensation = %f", m_ctrl_var.v_rot);
         }
 
         //! Computes the robustness term
@@ -1113,10 +1113,16 @@ namespace Control
 
 //            dispatch(m_speed_cmd,Tasks::DF_LOOP_BACK);
             dispatch(m_speed_cmd); dispatch(m_hrate_cmd);
-
-            // Logging
             inf("Control command = (%f, %f)", m_speed_cmd.value, m_hrate_cmd.value);
 
+            // Logging
+            logData();
+        }
+
+        //! Log all the necessary data
+        void
+        logData()
+        {
             // Control commands
             MPFVar.ctrl_cmd_v = m_ctrl_var.cmd(0,0);
             MPFVar.ctrl_cmd_omega = m_ctrl_var.cmd(1,0);
@@ -1124,12 +1130,15 @@ namespace Control
             MPFVar.sat_ctrl_cmd_omega = m_hrate_cmd.value;
             MPFVar.robust_v = m_ctrl_var.robust(0,0);
             MPFVar.robust_omega = m_ctrl_var.robust(1,0);
+            MPFVar.override = m_ctrl_params.override_ctrller;
 
             // Path variables
             MPFVar.gamma = m_ctrl_var.gamma;
             MPFVar.gamma_dot = m_ctrl_var.gamma_dot;
             MPFVar.gamma_ref = m_ctrl_var.gamma_ref;
             MPFVar.g_err = m_ctrl_var.g_err;
+            MPFVar.v_consensus = m_ctrl_var.v_consensus;
+            MPFVar.v_rot = m_ctrl_var.v_rot;
 
             // Target state
             MPFVar.target_x = m_target_es.Pt(0,0);
@@ -1144,11 +1153,11 @@ namespace Control
             // Vehicle state
             MPFVar.x = m_state.Pv(0,0);
             MPFVar.y = m_state.Pv(1,0);
-            MPFVar.z = state.z;
-            MPFVar.psi = state.psi;
+            MPFVar.z = 0.0;
+            MPFVar.psi = m_state.psi;
             MPFVar.vx = m_state.dPv(0,0);
             MPFVar.vy = m_state.dPv(1,0);
-            MPFVar.vz = state.vz;
+            MPFVar.vz = 0.0;
 
             // References
             MPFVar.pd_x = m_ctrl_var.Pd(0,0);
@@ -1180,7 +1189,6 @@ namespace Control
 
             // Dispatch log data
             dispatch(MPFVar);
-
         }
 
         void

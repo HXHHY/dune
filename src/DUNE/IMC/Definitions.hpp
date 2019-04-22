@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 308226469d065ee385084a0ce5c35397                            *
+// IMC XML MD5: 7a3ed426d58582705930c36d3be90198                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -25056,6 +25056,8 @@ namespace DUNE
     class MPFVariables: public Message
     {
     public:
+      //! Override controller.
+      uint8_t override;
       //! Longituginal velocity command.
       fp32_t ctrl_cmd_v;
       //! Angular velocity command.
@@ -25076,6 +25078,10 @@ namespace DUNE
       fp32_t gamma_ref;
       //! PF Correction.
       fp32_t g_err;
+      //! Consensus control law.
+      fp32_t v_consensus;
+      //! Path rotation correction.
+      fp32_t v_rot;
       //! Target position x.
       fp32_t target_x;
       //! Target position y.
@@ -25194,7 +25200,7 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 180;
+        return 189;
       }
 
       void
@@ -25207,7 +25213,7 @@ namespace DUNE
     public:
       //! Path variable gamma.
       fp32_t gamma;
-      //! Vehicle ID.
+      //! System unique ID.
       uint8_t systemid;
 
       static uint16_t
