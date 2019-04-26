@@ -262,11 +262,24 @@ namespace Control
           Task(const std::string& name, Tasks::Context& ctx):
               DUNE::Control::PathController(name, ctx)
           {
+              param("Use MPF controller?", isUsingMPF)
+                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
+                      .defaultValue("false")
+                      .description("Use MPF as path controller.");
+
               param("Override controller", m_ctrl_params.override_ctrller)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
                       .defaultValue("false")
                       .description("True if override controller is active.");
+
+              param("Coordenation Sample Time", m_ctrl_params.periodic_send)
+                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
+                      .minimumValue("0.0")
+                      .defaultValue("1.0")
+                      .description("Sample time to send coordination messages.");
 
               param("Kx Gain", m_ctrl_params.k_gain.x)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
@@ -384,15 +397,23 @@ namespace Control
                       .defaultValue("true")
                       .description("True if lemnscate main axis is the y-direction (Inf form); False otherwise (8 form).");
 
-              param("Is it following?", m_ctrl_params.isFollowing)
-                      .defaultValue("false")
-                      .description("True if the target is stationary (end of the Tracking State).");
-
               param("Use robust term?", m_ctrl_params.useRobust)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
                       .defaultValue("false")
                       .description("Compensate for disturbances using SM term.");
+
+              param("Rho Gain", m_ctrl_params.rho)
+                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
+                      .defaultValue("0.3")
+                      .description("Gain for the robustness term.");
+
+              param("Epsilon Robust", m_ctrl_params.epsilon_w)
+                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
+                      .defaultValue("1.0")
+                      .description("Threshold for the robustness term.");
 
               param("Use current observer?", m_ctrl_params.isObserving)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
@@ -411,12 +432,6 @@ namespace Control
                       .defaultValue("")
                       .description("Gains for the disturbance observer.");
 
-              param("Use MPF controller?", isUsingMPF)
-                      .visibility(Tasks::Parameter::VISIBILITY_USER)
-                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
-                      .defaultValue("false")
-                      .description("Use MPF as path controller.");
-
               param("Target Name", m_target_params.name)
                       .defaultValue("lauv-nemo-1")
                       .description("Name of the target vehicle.");
@@ -426,30 +441,11 @@ namespace Control
                       .defaultValue("10.0")
                       .description("Maximum time to wait for new target data.");
 
-              param("Coordenation Sample Time", m_ctrl_params.periodic_send)
-                      .visibility(Tasks::Parameter::VISIBILITY_USER)
-                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
-                      .minimumValue("0.0")
-                      .defaultValue("1.0")
-                      .description("Sample time to send coordination messages.");
-
               param("Estimate Velocity?", m_ctrl_params.compVel)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
                       .scope(Tasks::Parameter::SCOPE_GLOBAL)
                       .defaultValue("true")
                       .description("True if the target velocity is being compensated.");
-
-              param("Rho Gain", m_ctrl_params.rho)
-                      .visibility(Tasks::Parameter::VISIBILITY_USER)
-                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
-                      .defaultValue("0.3")
-                      .description("Gain for the robustness term.");
-
-              param("Epsilon Robust", m_ctrl_params.epsilon_w)
-                      .visibility(Tasks::Parameter::VISIBILITY_USER)
-                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
-                      .defaultValue("1.0")
-                      .description("Threshold for the robustness term.");
 
               param("State Covariance Initial State", target_state_cov)
                       .defaultValue("")
@@ -465,6 +461,12 @@ namespace Control
                       .defaultValue("")
                       .size(2)
                       .description("Kalman Filter process noise covariance values");
+
+              param("Is it following?", m_ctrl_params.isFollowing)
+                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
+                      .defaultValue("false")
+                      .description("True if the target is stationary (end of the Tracking State).");
 
               m_target_es.num_crossings = 0;
               m_target_es.old_psi = 0.0;

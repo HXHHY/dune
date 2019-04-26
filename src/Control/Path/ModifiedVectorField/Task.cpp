@@ -109,6 +109,8 @@ namespace Control
                     .description("Turn rate gain for extended control");
 
             param("Is Dispatching?", m_args.isDispatching)
+                    .visibility(Tasks::Parameter::VISIBILITY_USER)
+                    .scope(Tasks::Parameter::SCOPE_GLOBAL)
                     .defaultValue("false")
                     .description("True if vehicle is dispatching its state.");
 
@@ -282,6 +284,21 @@ namespace Control
             bool isUsingMPF; castLexical(useMPF, isUsingMPF);
             if (isUsingMPF && !m_args.isDispatching)
                 return;
+
+            // Dispatch vehicle state each X seconds
+            if ( ( m_timer.overflow() || m_args.msg_period == 0 ) && m_args.isDispatching ) {
+                m_target_state.x = state.x;
+                m_target_state.y = state.y;
+                m_target_state.psi = state.psi;
+                m_target_state.vx = state.vx;
+                m_target_state.vy = state.vy;
+                m_target_state.omega = state.r;
+                m_target_state.lat = state.lat;
+                m_target_state.lon = state.lon;
+                dispatch(m_target_state);
+                inf("Dispatching vehicle pose = (%f,%f), %f", m_target_state.x, m_target_state.y, m_target_state.psi);
+                m_timer.reset();
+            }
 
             double ref = DUNE::Math::c_half_pi + std::atan(2 * m_gain * (ts.range - ts.loiter.radius));
 
