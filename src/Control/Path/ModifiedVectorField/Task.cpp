@@ -229,7 +229,7 @@ namespace Control
                 m_target_state.lat = state.lat;
                 m_target_state.lon = state.lon;
                 dispatch(m_target_state);
-                inf("Dispatching vehicle pose = (%f,%f), %f", m_target_state.x, m_target_state.y, m_target_state.psi);
+                debug("Dispatching vehicle pose = (%f,%f), %f", m_target_state.x, m_target_state.y, m_target_state.psi);
                 m_timer.reset();
             }
 
@@ -270,7 +270,7 @@ namespace Control
             dispatch(m_heading);
 
             // Logging
-            inf("Speed = %f, Heading = %f", m_speed.value, m_heading.value);
+            debug("Speed = %f, Heading = %f", m_speed.value, m_heading.value);
         }
 
         //! Execute a loiter control step
@@ -296,7 +296,7 @@ namespace Control
                 m_target_state.lat = state.lat;
                 m_target_state.lon = state.lon;
                 dispatch(m_target_state);
-                inf("Dispatching vehicle pose = (%f,%f), %f", m_target_state.x, m_target_state.y, m_target_state.psi);
+                debug("Dispatching vehicle pose = (%f,%f), %f", m_target_state.x, m_target_state.y, m_target_state.psi);
                 m_timer.reset();
             }
 

@@ -67,6 +67,7 @@ namespace Control
               uint8_t ID;
               fp32_t gamma_est;
               fp32_t gamma_error;
+              Time::Counter<double> loss_timer;
           };
 
           //! Kalman Filter matrices.
@@ -134,6 +135,7 @@ namespace Control
               //double tau = 0.0001;        // Pole of the linear, first order velocity estimator
               double rho;                 // Gain for the robust MPF controller
               double periodic_send;       // Time to wait until sending another update of the gamma variable through the coordination channels
+              double comm_loss;           // Time to wait until consider communication lost
 
               std::string pathType;       // Type of path we want to define
               int path_type;              // Integer for the path type
@@ -280,6 +282,13 @@ namespace Control
                       .minimumValue("0.0")
                       .defaultValue("1.0")
                       .description("Sample time to send coordination messages.");
+
+              param("Loss Communication Time", m_ctrl_params.comm_loss)
+                      .visibility(Tasks::Parameter::VISIBILITY_USER)
+                      .scope(Tasks::Parameter::SCOPE_GLOBAL)
+                      .minimumValue("5.0")
+                      .defaultValue("10.0")
+                      .description("Limit time to consider communication as lost.");
 
               param("Kx Gain", m_ctrl_params.k_gain.x)
                       .visibility(Tasks::Parameter::VISIBILITY_USER)
@@ -482,7 +491,7 @@ namespace Control
         {   
             PathController::onUpdateParameters();
             int current_system_ID = getSystemId();
-            inf(DTR("My name is %s, ID %d"), getSystemName(), current_system_ID);
+            debug(DTR("My name is %s, ID %d"), getSystemName(), current_system_ID);
 
             m_target_timer.reset();
             if (paramChanged(m_target_params.max_timer))
@@ -521,19 +530,19 @@ namespace Control
 
             // Initialize the choosen path type
             if (m_ctrl_params.pathType == "circle") {
-                inf("Circular path was chosen.");
+                debug("Circular path was chosen.");
                 m_ctrl_params.path_type = 1;
             }
             else if (m_ctrl_params.pathType == "ellipse") {
-                inf("Elliptical path was chosen.");
+                debug("Elliptical path was chosen.");
                 m_ctrl_params.path_type = 2;
             }
             else if (m_ctrl_params.pathType == "lemniscate") {
-                inf("Lemniscate path was chosen.");
+                debug("Lemniscate path was chosen.");
                 m_ctrl_params.path_type = 3;
             }
             else {
-                inf("GotoPoint controller was chosen (path is a single point).");
+                debug("GotoPoint controller was chosen (path is a single point).");
                 m_ctrl_params.path_type = 0;
             }
 
@@ -572,7 +581,7 @@ namespace Control
             double tempSO2[4] = {0, 0, 0, 0};
             Matrix tempSO2Vec(tempSO2, 2, 2);
             m_target_es.SO2 = tempSO2Vec;
-            inf(DTR("Target ID is %d"), m_target_params.ID);
+            debug(DTR("Target ID is %d"), m_target_params.ID);
 
             // Define the continuous state transition matrix and initialize Kalman filter
             initKalman();
@@ -598,7 +607,7 @@ namespace Control
             if ( !isUsingMPF )
                 return;
 
-            inf("Path startup!");
+            debug("Path startup!");
             onUpdateParameters();
 
             // Reset gamma here according to the objective quadrant.
@@ -620,8 +629,8 @@ namespace Control
             m_target_es.psi = 0.0;
 
             // Logs
-            inf("Target initial position = (%f, %f)", m_target_es.Pt(0,0), m_target_es.Pt(1,0));
-            inf("Target initial orientation = %f", m_target_es.psi);
+            debug("Target initial position = (%f, %f)", m_target_es.Pt(0,0), m_target_es.Pt(1,0));
+            debug("Target initial orientation = %f", m_target_es.psi);
         }
 
         //! Reserve entity identifiers.
@@ -641,7 +650,7 @@ namespace Control
             disableControlLoops(IMC::CL_YAW);
             enableControlLoops(IMC::CL_SPEED | IMC::CL_YAW_RATE);
 
-            inf("Executing MPF-epsilon controller.");
+            debug("Executing MPF-epsilon controller.");
         }
 
         void
@@ -788,8 +797,8 @@ namespace Control
             Matrix tempdPvVec(tempdPv, 2, 1);
             m_state.dPv = tempdPvVec;
 
-            inf("Vehicle pose = (%f, %f), %f", m_state.Pv(0,0), m_state.Pv(1,0), m_state.psi);
-            inf("Vehicle vel. = (%f, %f)", m_state.dPv(0,0), m_state.dPv(1,0) );
+            debug("Vehicle pose = (%f, %f), %f", m_state.Pv(0,0), m_state.Pv(1,0), m_state.psi);
+            debug("Vehicle vel. = (%f, %f)", m_state.dPv(0,0), m_state.dPv(1,0) );
         }
 
         //! Updates the state of the path variable gamma.
@@ -809,8 +818,8 @@ namespace Control
             }
 
             // Logs
-            inf("Gamma = %f", m_ctrl_var.gamma);
-            // inf("Rot. compensation = %f", m_ctrl_var.v_rot);
+            debug("Gamma = %f", m_ctrl_var.gamma);
+            // debug("Rot. compensation = %f", m_ctrl_var.v_rot);
         }
 
         //! Computes the robustness term
@@ -833,17 +842,29 @@ namespace Control
         computeConsensus(const TrackingState* ts)
         {
             // Update gamma estimations and compute the sum for consensus
-            fp64_t sum = 0;
+            fp64_t sum = 0; std::vector<int> lost_indexes;
             for( int i = 0; i < connected_vehicles.size(); i=i+1 ) {
                 double f_gamma = 0.0; // ZOH
                 connected_vehicles[i].gamma_est = connected_vehicles[i].gamma_est + (ts->delta)*f_gamma;
                 connected_vehicles[i].gamma_error = (m_ctrl_var.gamma - connected_vehicles[i].gamma_est);
                 sum = sum + connected_vehicles[i].gamma_error;
 
-                inf("Gamma errors = %f", connected_vehicles[i].gamma_error);
+                inf("Gamma error = %f from vehicle %d", connected_vehicles[i].gamma_error, connected_vehicles[i].ID);
+
+                // If communication loss timer overflows...
+                if ( connected_vehicles[i].loss_timer.overflow() )
+                {
+                    lost_indexes.push_back(i);
+                    inf("Vehicle %d disconnected after %f seconds without communications.", connected_vehicles[i].ID, m_ctrl_params.comm_loss);
+                }
             }
 
             m_ctrl_var.v_consensus = -m_ctrl_params.k_consensus*sum;
+
+            // Delete lost vehicles...
+            for( int k = 0; k < lost_indexes.size(); k=k+1 )
+                connected_vehicles.erase(connected_vehicles.begin() + lost_indexes[k]);
+
         }
 
         //! Consumer for a CooperativeState message
@@ -859,6 +880,7 @@ namespace Control
             for( int i = 0; i < num_conn_vehicles; i=i+1 ) {
                 if ( coord_state->systemid == connected_vehicles[i].ID ) {
                     connected_vehicles[i].gamma_est = coord_state->gamma;
+                    connected_vehicles[i].loss_timer.reset();
                     new_vehicle_arrived = 0;
                     break;
                 }
@@ -869,7 +891,8 @@ namespace Control
                 new_vehicle.ID = coord_state->systemid;
                 new_vehicle.gamma_est = coord_state->gamma;
                 new_vehicle.gamma_error = (m_ctrl_var.gamma - coord_state->gamma);
-
+                new_vehicle.loss_timer.reset();
+                new_vehicle.loss_timer.setTop(m_ctrl_params.comm_loss);
                 connected_vehicles.push_back(new_vehicle);
             }
 
@@ -893,7 +916,7 @@ namespace Control
                                     target_state->lat   , target_state->lon , 0,
                                     &m_target_es.Pvt0.x , &m_target_es.Pvt0.y );
 
-                inf("Initial displacement btw vehicles = (%f,%f)", m_target_es.Pvt0.x, m_target_es.Pvt0.y);
+                debug("Initial displacement btw vehicles = (%f,%f)", m_target_es.Pvt0.x, m_target_es.Pvt0.y);
                 m_ctrl_params.target_flag = 0;
             }
 
@@ -914,7 +937,7 @@ namespace Control
             m_target_es.newCoord.psi = target_state->psi + 2*Math::c_pi*m_target_es.num_crossings;
 
             m_target_params.isNewCoord = 1;
-            //inf("New target state received");
+            //debug("New target state received");
         }
 
         //! Set Kalman transition matrix
@@ -1030,9 +1053,9 @@ namespace Control
             m_ctrl_var.dP_ref = m_target_es.dPt + m_target_es.Rt*(m_ctrl_var.grad_Pd*m_ctrl_var.gamma_dot + m_ctrl_var.cross_prod);
 
             if ( getSystemId() != m_target_params.ID ) {
-                inf("Target pose = (%f, %f), %f", m_target_es.Pt(0,0), m_target_es.Pt(1,0), m_target_es.psi);
-                //inf("Target vels. = (%f, %f), %f", m_target_es.dPt(0,0), m_target_es.dPt(1,0), m_target_es.omega);
-                inf("Norm of target vel. = %f", m_target_es.dPt.norm_2() );
+                debug("Target pose = (%f, %f), %f", m_target_es.Pt(0,0), m_target_es.Pt(1,0), m_target_es.psi);
+                //debug("Target vels. = (%f, %f), %f", m_target_es.dPt(0,0), m_target_es.dPt(1,0), m_target_es.omega);
+                debug("Norm of target vel. = %f", m_target_es.dPt.norm_2() );
             }
 
             // Change the desired path in Neptus
@@ -1049,7 +1072,7 @@ namespace Control
             // Update errors (world and local coordinates)
             m_ctrl_var.World_error = m_state.Pv - m_ctrl_var.P_ref;
             m_ctrl_var.MPF_error = transpose(m_state.Rv)*m_ctrl_var.World_error + m_ctrl_params.Eps;
-            inf("MPF error norm = %f", m_ctrl_var.MPF_error.norm_2());
+            debug("MPF error norm = %f", m_ctrl_var.MPF_error.norm_2());
 
             double eta, v_term_den;
             double norm_gradPd = m_ctrl_var.grad_Pd.norm_2();
@@ -1074,19 +1097,19 @@ namespace Control
 
 //            Matrix dot_prod = transpose(m_ctrl_var.grad_Pd)*m_ctrl_var.Pd;
 //            Matrix null_term = (dot_prod(0)/pow(v_term_den,2))*m_target_es.SO2*m_ctrl_var.grad_Pd;;
-//            inf("Dot product = %f", dot_prod(0) );
-//            inf("Cancel. of the rot. term = (%f, %f)", null_term(0), null_term(1));
+//            debug("Dot product = %f", dot_prod(0) );
+//            debug("Cancel. of the rot. term = (%f, %f)", null_term(0), null_term(1));
 
             // Compute the robustness term
             if (m_ctrl_params.useRobust) {
                 computeRobust();
-                inf("Robust term = (%f, %f)", m_ctrl_var.robust(0,0), m_ctrl_var.robust(1,0) );
+                debug("Robust term = (%f, %f)", m_ctrl_var.robust(0,0), m_ctrl_var.robust(1,0) );
             }
 
             // Update observer state
             if (m_ctrl_params.isObserving) {
                 updateObserver(&ts);
-                inf("Disturbance = (%f, %f), %f", obsv_state.Dest(0,0), obsv_state.Dest(1,0), obsv_state.Domega_est );
+                debug("Disturbance = (%f, %f), %f", obsv_state.Dest(0,0), obsv_state.Dest(1,0), obsv_state.Domega_est );
             }
 
             // Path Following controller 1: without saturation in control law
@@ -1115,7 +1138,7 @@ namespace Control
 
 //            dispatch(m_speed_cmd,Tasks::DF_LOOP_BACK);
             dispatch(m_speed_cmd); dispatch(m_hrate_cmd);
-            inf("Control command = (%f, %f)", m_speed_cmd.value, m_hrate_cmd.value);
+            debug("Control command = (%f, %f)", m_speed_cmd.value, m_hrate_cmd.value);
 
             // Logging
             logData();
@@ -1267,8 +1290,8 @@ namespace Control
             obsv_state.Domega_est = obsv_state.Domega_est + ts->delta*obsv_state.dDomega_est;
 
             //! Logs
-            inf("Position estimation error = (%f, %f)", obsv_state.Perr(0,0), obsv_state.Perr(1,0) );
-            inf("Angle estimation error = %f", obsv_state.psi_err );
+            debug("Position estimation error = (%f, %f)", obsv_state.Perr(0,0), obsv_state.Perr(1,0) );
+            debug("Angle estimation error = %f", obsv_state.psi_err );
 
         }
       };
